@@ -1,0 +1,21 @@
+<div class="wrap">
+    <h1>ACT Load - Upload Single JSON</h1>
+    <form id="act-load-form" method="post" enctype="multipart/form-data">  <label for="json_file">JSON File:</label><br>
+        <input type="file" id="json_file" name="json_file" accept=".json" required><br><br>  
+        <label for="image_handling">Image Handling:</label>
+        <select id="image_handling" name="image_handling">
+            <option value="none">None</option>
+            <option value="import">Import</option>
+        </select><br><br>
+
+        <label for="link_handling">Link Handling:</label>
+        <select id="link_handling" name="link_handling">
+            <option value="none">None</option>
+        </select><br><br>
+
+        <?php wp_nonce_field('act_load_nonce', 'act_load_nonce'); ?>
+        <input type="submit" name="submit_button" class="button button-primary" value="Upload">
+    </form>
+
+    <div id="act-load-results"></div>
+</div>
