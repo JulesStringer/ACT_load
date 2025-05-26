@@ -1,6 +1,24 @@
 jQuery(document).ready(function($) {
     $('#act-load-form').submit(function(event) {
-        jQuery(document).ready(function($) {
+//        jQuery(document).ready(function($) {
+            function load_progress() {
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'get_migration_progress' // Define an action hook
+                    },
+                    success: function(response) {
+                        $('#act_load_migration_progress_container').html(response);
+                    }
+                });
+            }
+        
+            // Initial load
+            load_progress();
+        
+            // Update progress every few seconds (e.g., 3 seconds)
+            setInterval(load_progress, 3000);
             $('#act-load-form').submit(function(event) {
                 event.preventDefault();
                 $('#act-load-results').html('Uploading...');
@@ -36,5 +54,5 @@ jQuery(document).ready(function($) {
                 });
             });
         });
-    });
+//    });
 });

@@ -1,0 +1,91 @@
+<div class="wrap">
+    <h2>Load Pages and Posts</h2>
+    <div id="act_load_migration_progress_container">
+        <?php
+        $progress_message = get_transient('act_load_migration_progress');
+        if ($progress_message) {
+            echo '<div class="notice notice-info"><p>' . esc_html($progress_message) . '</p></div>';
+            // If it's a final message, consider deleting the transient
+            if (strpos($progress_message, 'completed') !== false || strpos($progress_message, 'error') !== false) {
+                delete_transient('act_load_migration_progress');
+            }
+        }
+        ?>
+    </div>
+    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+        <input type="hidden" name="action" value="act_load_pages_posts_process">
+
+        <table class="form-table">
+            <tr>
+                <th scope="row"><label for="source">Source Site:</label></th>
+                <td>
+                    <select name="source" id="source">
+                        <option value="ACT">ACT</option>
+                        <option value="WW">Wildlife Wardens (WW)</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><label for="content_type">Content Type:</label></th>
+                <td>
+                    <select name="content_type" id="content_type">
+                        <option value="post">Post</option>
+                        <option value="page">Page</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><label for="method">Method:</label></th>
+                <td>
+                    <select id="method" name="method">
+                        <option value="all">All</option>
+                        <option value="slug" selected>URL/slug</option>
+                    </select>
+                </td>
+            </tr>
+            <tr class="DATE_ENTRY">
+                <th>Dates:</th>
+                <td>From:<input type="date" id="from_date" name="from_date"/></td>
+                <td>To:<input type="date" id="to_date" name="to_date"/></td>
+            </tr>
+            <tr class="URL_entry">
+                <td>URL:</td>
+                <td>
+                    <input name="url" id="url" width="300"/>
+                </td>
+            </tr>
+            <tr class="URL_entry">
+                <td>Slug</td>
+                <td>
+                    <input name="slug" id="slug" width="150"/>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><label for="images">Images:</label></th>
+                <td>
+                    <select name="images" id="images">
+                        <option value="ignore">Ignore</option>
+                        <option value="list">List</option>
+                        <option value="transform">Transform</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><label for="insert_posts">Insert Pages/Posts:</label></th>
+                <td>
+                    <input type="checkbox" name="insert_posts" id="insert_posts" value="1" checked>
+                    <label for="insert_posts">Insert Pages/Posts into this site.</label>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><label for="generate_report">Generate Report:</label></th>
+                <td>
+                    <input type="checkbox" name="generate_report" id="generate_report" value="1" checked>
+                    <label for="generate_report">Generate a report of issues.</label>
+                </td>
+            </tr>
+        </table>
+
+        <?php submit_button('Start Migration'); ?>
+    </form>
+</div>
