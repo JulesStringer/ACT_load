@@ -27,8 +27,143 @@
         <h1>ACT Load</h1>
         <p>This plugin loads pages and posts from the following sources:</p>
         <ul>
-            <li>JSON files downloaded from the WP REST API into subdirectories of newsite</li>
-            <li>Wordpress pages and posts from a legacy site</li>
+            <li>Load Single JSON Page - JSON files downloaded from the WP REST API into subdirectories of newsite</li>
+            <li>Load Pages and Posts - Wordpress pages and posts from a legacy site</li>
         </ul>
+        <h2>Load Single JSON Page</h2>
+        <p>Takes a json file downloaded from the Wordpress REST API (as used in https://actionclimateteignbridge.org/newsite
+            and imports it to the current site, including:
+            <ul>
+                <li>Moving any images</li>
+                <li>Converting links to newsite and cc.actionclimateteignbridge.org/wordpress</li>
+            </ul>
+        </p>
+        <p>NOTE - this was used early in the loading development to recover a couple of pages from newsite to oldsite.
+            It is not expected that it will be used long term.
+        </p>
+        <h2>Load Pages and Posts</h2>
+        <p>Loads posts, pages, team members from various sites to the current site. The following are transformed in the process:
+            <ul>
+                <li>Images are reduced to no more than 200kb and no more than 300 X 300 pixels</li>
+                <li>Links internal to the site are changed so they still work (more detail later)</li>
+                <li>Categories are rationalise (see below)</li>
+                <li>Authors are mapped to users on the current site</li>
+                <li>Comments are copied</li>
+                <li>Featured media is set</li>
+                <li>Any post excerpt is set</li>
+            </ul>
+        </p>
+        <h3>Load Pages and Posts - input form</h3>
+        <p>The admin form has the following inputs:</p>
+        <ul>
+            <li>Source Site - remote site containing source posts can be:
+                <ul>
+                    <li>ACT - actionclimateteignbridge.org/oldsite</li>
+                    <li>WW - ww.actionclimateteignbridge.org</li>
+                </ul>
+            </li>
+            <li>Content type - post type to convert can be:
+                <ul>
+                    <li>Post - normal post</li>
+                    <li>Team - team member (post type used by the RadiusTheme Team plugin) </li>
+                    <li>Page - normal page</li>
+                </ul>
+            </li>
+            <li>
+                Method - selection method for source can be: 
+                <ul>
+                    <li>All - all within data range</li>
+                    <li>URL / slug - URL or slug of a single post</li>
+                </ul>
+            </li>
+            <li>Dates - from and to date range for current batch</li>
+            <li>URL - url of page to convert</li>
+            <li>Slug - slug of page to convert</li>
+            <li>Insert Pages/Posts - Checkbox normally set , which can be used for a dry run</li>
+            <li>Generate Report - generates a report on conversion process.</li>
+        </ul>
+
+        <h3>Processing detail</h3>
+        <h4>Link transformations</h4>
+        <p>Links matching patterns in the table below are transformed as follows, all other links are untouched:</p>
+        <table>
+            <tr><th>Pattern</th><th>Transformation</th><th>Reasoning</th></tr>
+            <tr>
+                <td>*/newsite/page.php/post/*</td>
+                <td>Replaced with index.php</td>
+                <td>newsite uses page.php to render json pages/posts whose slug follows</td>
+            </tr>
+            <tr>
+                <td>/newsite/page.php/page/*</td>
+                <td>https://actionclimateteignbridge.org/newsite/page.php/page/*</td>
+                <td>Pages are being rewritten so don't have a straight equivalent, better for editors to move these manually</td>
+            </tr>
+            <tr>
+                <td>/lookup_document.php*</td>
+                <td>https://actionclimateteignbridge.org/lookup_document.php*</td>
+                <td>lookup_document.php is used to look up versioned documents on ACT and TECs sites, needs to point to a directory which will have a working lookup_document.php</td>
+            </tr>
+            <tr>
+                <td>*/newsite/post.html?slug=*</td>
+                <td>*/index.php/slug</td>
+                <td>This is the old form of link used by newsite which renders posts from json files, it needs converting</td>
+            </tr>
+            <tr>
+                <td>*/wp-content/uploads</td>
+                <td>Uploaded attachment is moved and path adjusted to match</td>
+                <td></td>
+            </tr>
+        </table>
+        <h4>Category Transformation</h4>
+        <p>Categories are transformed as follows:</p>
+           if ( $category_slug === 'build-environment'){
+        $category_slug = 'energy-and-built-environment';
+        $category_name = 'Energy & Built Environment';
+    } else if ( $category_slug === 'newletters' ) {
+        $category_slug = 'news';
+        $category_name = 'News';
+    } else if ( $category_slug === 'upcoming-events'){
+        $category_slug = 'news';
+        $category_name = 'News';
+    } else if ( $category_slug === 'carbon'){
+        $category_slug = 'carbon-cutters';
+        $category_name = 'Carbon cutters';
+    }
+        <table>
+            <tr><th>Old category slug</th><th>New Category slug</th></tr>
+            <tr>
+                <td>build-environment</td>
+                <td>energy-and-built-environment</td>
+            </tr>
+            <tr>
+                <td>news</td>
+                <td>news</td>
+            </tr>
+            <tr>
+                <td>newletters</td>
+                <td>news</td>
+            </tr>
+            <tr>
+                <td>upcoming-events</td>
+                <td>news</td>
+            </tr>
+            <tr>
+                <td>carbon</td>
+                <td>carbon-cutters</td>
+            </tr>
+            <tr>
+                <td>carbon-cutters</td>
+                <td>carbon-cutters</td>
+            </tr>
+        </table>
+        <p>All other categories remain the same</p>
+        <h4>Authors</h4>
+        <p>All WW posts have been assigned to Vicky.</p>
+        <p>Any posts written by Flavio have been assigned to Vicky</p>
+        <p>Any posts written by Peta have been assigned to Scott</p>
+        <p>The original author has been retained in other cases.</p>
+        <p>Some posts have used the device 'Writes X' to indicate that Pauline entered and edited a post originating from a guest writer,
+            who is not a user of the wordpress system. This guest writer is not currently acknowledged as author.
+        </p>
     </body>
 </html>

@@ -13,6 +13,9 @@ $old_site_categories_map = array(); // old_id => ['name' => '...', 'slug' => '..
 global $old_to_new_category_id_map;
 $old_to_new_category_id_map = array(); // old_id => new_id (after creation on new site)
 
+global $old_uncategorised_id; 
+$old_uncategorised_id = null;
+
 /**
  * Initializes the category conversion library.
  * Fetches all categories from the old site and creates them on the new site,
@@ -23,7 +26,7 @@ $old_to_new_category_id_map = array(); // old_id => new_id (after creation on ne
  * @return bool True if initialization was successful, false otherwise.
  */
 function init_category_conversion( $old_site_base_url ) {
-    global $old_site_categories_map, $old_to_new_category_id_map;
+    global $old_site_categories_map, $old_to_new_category_id_map, $old_uncategorised_id;
 
     // 1. Fetch all categories from the old site
     $url = trailingslashit( $old_site_base_url ) . "wp-json/wp/v2/categories?per_page=100";
@@ -60,6 +63,10 @@ function init_category_conversion( $old_site_base_url ) {
         if ( $cat_data['parent'] == 0 ) {
             _get_or_create_single_category_and_map( $old_id, $cat_data );
         }
+        if ( $cat_data['slug'] === 'uncategorised'){
+            $old_uncategorised_id = $old_id;
+            error_log(sprintf("old_uncategorised_id set to %d", $old_uncategorised_id));
+        }
     }
 
     // Subsequent passes for children until all processed
@@ -92,7 +99,6 @@ function init_category_conversion( $old_site_base_url ) {
 
     return true;
 }
-
 /**
  * Helper function: Gets or creates a single category on the new site.
  * Populates the $old_to_new_category_id_map with the result.
@@ -111,7 +117,20 @@ function _get_or_create_single_category_and_map( $old_id, $cat_data ) {
 
     $category_name = $cat_data['name'];
     $category_slug = ! empty( $cat_data['slug'] ) ? $cat_data['slug'] : sanitize_title( $category_name );
-
+    // Translate slug and name if needed
+    if ( $category_slug === 'build-environment'){
+        $category_slug = 'energy-and-built-environment';
+        $category_name = 'Energy & Built Environment';
+    } else if ( $category_slug === 'newletters' ) {
+        $category_slug = 'news';
+        $category_name = 'News';
+    } else if ( $category_slug === 'upcoming-events'){
+        $category_slug = 'news';
+        $category_name = 'News';
+    } else if ( $category_slug === 'carbon'){
+        $category_slug = 'carbon-cutters';
+        $category_name = 'Carbon cutters';
+    }
     // 1. Check if category exists by slug (most reliable for uniqueness)
     $existing_term = get_term_by( 'slug', $category_slug, 'category' );
 
@@ -164,16 +183,23 @@ function _get_or_create_single_category_and_map( $old_id, $cat_data ) {
  * @return array An array of integer IDs of the corresponding categories on the new site.
  * Categories that could not be mapped will be excluded.
  */
-function get_new_category_ids_from_old( $old_category_ids ) {
-    global $old_to_new_category_id_map;
+function get_new_category_ids_from_old( $old_category_ids, $source ) {
+    global $old_to_new_category_id_map, $old_uncategorised_id;
     $new_category_ids = array();
-
+    if ( $source === 'WW'){
+        $ww_category = get_term_by('slug', 'wildlife-wardens', 'category');
+        $new_category_ids[] = $ww_category->term_id;
+        return $new_category_ids;
+    } 
     if ( ! is_array( $old_category_ids ) || empty( $old_category_ids ) ) {
         return array();
     }
 
     foreach ( $old_category_ids as $old_id ) {
-        if ( isset( $old_to_new_category_id_map[ $old_id ] ) ) {
+        if ( count($old_category_ids) > 1 && $old_id === $old_uncategorised_id){
+            // do nothing
+            error_log(sprintf("Uncategorised used when %d categories assigned", count($old_category_ids)));
+        } else if ( isset( $old_to_new_category_id_map[ $old_id ] ) ) {
             $new_category_ids[] = (int) $old_to_new_category_id_map[ $old_id ];
         } else {
             error_log( 'CATEGORY_CONVERSION_WARNING: Old category ID ' . $old_id . ' not found in mapping. This category will be skipped for the current post.' );

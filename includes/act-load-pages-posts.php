@@ -187,33 +187,32 @@ function transform_and_upload_image_old($src, &$report){
                             wp_update_attachment_metadata($attach_id, wp_generate_attachment_metadata($attach_id, $upload_file['file']));
                             // ... after wp_update_attachment_metadata($attach_id, wp_generate_attachment_metadata($attach_id, $upload_file['file']));
 
-$main_image_path = get_attached_file($attach_id);
-error_log('--- Path Checks for ID ' . $attach_id . ' ---');
-error_log('Main Image Server Path (from get_attached_file): ' . $main_image_path);
-error_log('Main Image file_exists(): ' . (file_exists($main_image_path) ? 'Yes' : 'No'));
-error_log('Main Image is_readable(): ' . (is_readable($main_image_path) ? 'Yes' : 'No'));
+                            $main_image_path = get_attached_file($attach_id);
+                            error_log('--- Path Checks for ID ' . $attach_id . ' ---');
+                            error_log('Main Image Server Path (from get_attached_file): ' . $main_image_path);
+                            error_log('Main Image file_exists(): ' . (file_exists($main_image_path) ? 'Yes' : 'No'));
+                            error_log('Main Image is_readable(): ' . (is_readable($main_image_path) ? 'Yes' : 'No'));
 
-$metadata = wp_get_attachment_metadata($attach_id);
-if (isset($metadata['sizes']['thumbnail']['file'])) {
-    $thumbnail_relative_filename = $metadata['sizes']['thumbnail']['file'];
-    $thumbnail_server_path = dirname($main_image_path) . '/' . $thumbnail_relative_filename;
+                            $metadata = wp_get_attachment_metadata($attach_id);
+                            if (isset($metadata['sizes']['thumbnail']['file'])) {
+                                $thumbnail_relative_filename = $metadata['sizes']['thumbnail']['file'];
+                                $thumbnail_server_path = dirname($main_image_path) . '/' . $thumbnail_relative_filename;
 
-    error_log('Thumbnail Server Path: ' . $thumbnail_server_path);
-    error_log('Thumbnail file_exists(): ' . (file_exists($thumbnail_server_path) ? 'Yes' : 'No'));
-    error_log('Thumbnail is_readable(): ' . (is_readable($thumbnail_server_path) ? 'Yes' : 'No'));
-} else {
-    error_log('Thumbnail size not found in metadata (should not happen given previous checks).');
-}
-error_log('--- End Path Checks ---');
+                                error_log('Thumbnail Server Path: ' . $thumbnail_server_path);
+                                error_log('Thumbnail file_exists(): ' . (file_exists($thumbnail_server_path) ? 'Yes' : 'No'));
+                                error_log('Thumbnail is_readable(): ' . (is_readable($thumbnail_server_path) ? 'Yes' : 'No'));
+                            } else {
+                                error_log('Thumbnail size not found in metadata (should not happen given previous checks).');
+                            }
+                            error_log('--- End Path Checks ---');
                             update_post_meta($attach_id, '_wp_attachment_image_alt', $attachment['post_title']);
                             $new_src = wp_get_attachment_url($attach_id);
                             $result['src'] = $new_src;
                             report_li($report, "Image transformed and uploaded: " . esc_html($src) . " to: " . esc_html($new_src));
-                            set_media_category($attach_id, 'Legacy Image', $report);
+                            set_media_category($attach_id, 'Post images', $report);
                         } else {
                             report_li($report, "Error inserting attachment: " . esc_html($src));
                         }
-
                     }
                     unlink($resized_file);
                 }
@@ -254,13 +253,13 @@ function transform_and_upload_image($src, &$report){
         if ( ! empty($existing_attachments) ){
             $result['attach_id'] = $existing_attachments[0];
             $result['src'] = wp_get_attachment_url($result['attach_id']);
-            report_li( $report, sprintf("Image already uploaded as attachment %d %s", $result['attach_id'], $result['src']));
+            error_log(sprintf("Image already uploaded as attachment %d %s", $result['attach_id'], $result['src']));
         } else {
             // Check for near matching name (your custom function)
             $result2 = get_attachment_matching($sanitized_filename);
             if ( $result2 !== null && isset($result2['attach_id']) ){ // Ensure 'attach_id' is set in result2
                 $result = $result2;
-                report_li( $report, sprintf("Image with near matching name %d %s found", $result['attach_id'], $result['src']));
+                error_log(sprintf("Image with near matching name %d %s found", $result['attach_id'], $result['src']));
             } else {
                 // Image not found, proceed with new upload
                 $image_content = wp_remote_retrieve_body($image_data);
@@ -276,7 +275,7 @@ function transform_and_upload_image($src, &$report){
                     $upload_file = wp_upload_bits($filename. '.'.$suffix, null, file_get_contents($resized_file));
 
                     if ($upload_file['error']) {
-                        report_li($report, "Error uploading image: " . esc_html($src) . " - " . $upload_file['error']);
+                        error_log("Error uploading image: " . esc_html($src) . " - " . $upload_file['error']);
                     } else {
                         // --- CRITICAL: Determine the correct 'file' path for metadata ---
                         // This path needs to be relative to the uploads base directory.
@@ -295,7 +294,7 @@ function transform_and_upload_image($src, &$report){
                             'file'           => $relative_file_path_for_metadata, // THIS IS THE FIX: crucial for get_attached_file()
                         );
 
-                        report_li($report, 'Attachment details for wp_insert_attachment: '. var_export($attachment_array, true));
+                        error_log('Attachment details for wp_insert_attachment: '. var_export($attachment_array, true));
 
                         // Insert the attachment post into the database
                         // Second argument to wp_insert_attachment is the absolute path to the file
@@ -349,7 +348,7 @@ function transform_and_upload_image($src, &$report){
                             report_li($report, "Image transformed and uploaded: " . esc_html($src) . " to: " . esc_html($new_src));
 
                             // Set media category (your custom function)
-                            set_media_category($attach_id, 'Legacy Image', $report);
+                            set_media_category($attach_id, 'Post images', $report);
 
                         } else {
                             report_li($report, "Error inserting attachment: " . esc_html($src) . " - wp_insert_attachment failed.");
@@ -426,12 +425,17 @@ function get_remote_media_url( $media, $base_url){
 function act_load_pages_posts_fetch_all_wp_rest($base_url, $post_type = 'post', $from_date = null, $to_date = null) {
     $all_posts = array();
     $page = 1;
-    $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $post_type . 's?page=' . $page;
+    $local_post_type = $post_type;
+    if ( $post_type !== 'team'){
+        $local_post_type .= 's';
+    }
+    $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $local_post_type . '?page=' . $page;
 
     do {
         $response = wp_remote_get($endpoint);
-
+        error_log('endpoint: '.$endpoint);
         if (is_wp_error($response)) {
+            error_log('Error; '.$response->get_error_message());
             return 'Error: ' . $response->get_error_message();
         }
 
@@ -443,6 +447,7 @@ function act_load_pages_posts_fetch_all_wp_rest($base_url, $post_type = 'post', 
         }
 
         if (isset($data['code'])) {
+            error_log('API Error: '. $data['message']);
             return 'API Error: ' . $data['message']; // Handle WordPress REST API errors
         }
 
@@ -452,12 +457,18 @@ function act_load_pages_posts_fetch_all_wp_rest($base_url, $post_type = 'post', 
         if (isset($headers['x-wp-totalpages'])) {
             $total_pages = intval($headers['x-wp-totalpages']);
             $page++;
-            $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $post_type . 's?page=' . $page;
+            $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $local_post_type . '?page=' . $page;
         } else {
             break; // No pagination headers
         }
     } while ($page <= $total_pages);
+    error_log(sprintf("%d posts read ", count($all_posts)));
     if ( $from_date !== null || $to_date !== null){
+        error_log(sprintf(
+             "from_date was %s to_date was %s",
+                    $from_date ? $from_date->format('Y-m-d H:i:s') : 'null',
+                    $to_date ? $to_date->format('Y-m-d H:i:s') : 'null'
+                ));
         $result = [];
         foreach($all_posts as $post){
             $post_date = new DateTime($post['date']); // Directly use $post['date']
@@ -482,6 +493,7 @@ function act_load_pages_posts_fetch_all_wp_rest($base_url, $post_type = 'post', 
         }
         $all_posts = $result;
     }
+    error_log(sprintf("at return from act_load_pages_posts_fetch_all_wp_rest %d posts read ", count($all_posts)));
     return $all_posts;
 }
 
@@ -580,11 +592,24 @@ function act_load_pages_posts_get_author($source, $content, &$report) {
                 case 4:// pauline
                     $new_id = 4;
                     break;
-                case 7:// audrey to vicky
-                    $new_id = 13;
+                case 7:// audrey
+                    // look up id of user audrey
+                    $user = get_user_by('login', 'audrey');
+                    if ($user) {
+                        $new_id = $user->ID;
+                    } else {
+                        report_li($report, "Author 'audrey' not found. Defaulting to current user.");
+                        $new_id = get_current_user_id();
+                    }
                     break;
                 case 9:// paul-scholes to paul-scholes
-                    $new_id = 12;
+                    $user = get_user_by('login', 'paulscholes');
+                    if ($user) {
+                        $new_id = $user->ID;
+                    } else {
+                        report_li($report, "Author 'paulscholes' not found. Defaulting to current user.");
+                        $new_id = get_current_user_id();
+                    }
                     break;
                 case 83:// flavio to vicky
                     $new_id = 5;
@@ -955,7 +980,9 @@ function act_load_pages_posts_process_content($content, $base_url, &$report, $so
         error_log('Categories not set ');
     }
     //var_dump($content);
-    $comment_status = $content['comment_status'];
+    if ( isset($content['comment_status'])){
+        $comment_status = $content['comment_status'];
+    }
     $date = $content['date'];
     $date_gmt = $content['date_gmt'];
 
@@ -999,7 +1026,7 @@ function act_load_pages_posts_process_content($content, $base_url, &$report, $so
     }
     if ( isset($categories)){
         error_log('Transforming categories '.var_export($categories, true));
-        $categories = get_new_category_ids_from_old( $categories );
+        $categories = get_new_category_ids_from_old( $categories , $source);
         error_log('Transformed ' . var_export($categories, true));
     }
     // process comments
@@ -1018,11 +1045,13 @@ function act_load_pages_posts_process_content($content, $base_url, &$report, $so
         'slug' => $slug,
         'excerpt' => $excerpt,
         'featured_media' => $featured_media,
-        'comment_status' => $comment_status,
         'date' => $post_date,
         'date_gmt' => $post_date_gmt,
         'comments' => $comments,
     );
+    if ( isset($comment_status)){
+        $result['comment_status'] = $comment_status;
+    }
     if ( isset($categories)){
         $result['categories'] = $categories;
     }
@@ -1032,44 +1061,48 @@ function act_load_pages_posts_process() {
     // Sanitize and validate input
     $source = sanitize_text_field($_POST['source']);
     $content_type = sanitize_text_field($_POST['content_type']);
-    $method = sanitize_text_field($_POST['method']);
+    if ( $content_type === 'team'){
+        $method = 'all';
+    } else {
+        $method = sanitize_text_field($_POST['method']);
+    }
     //$ids_list = sanitize_textarea_field($_POST['ids_list']);
     $slug = sanitize_text_field($_POST['slug']);
-    $images = sanitize_text_field($_POST['images']);
+    //$images = sanitize_text_field($_POST['images']);
     //$links_internal = sanitize_text_field($_POST['links_internal']);
     //$links_external = sanitize_text_field($_POST['links_external']);
     $insert_posts = isset($_POST['insert_posts']) ? true : false;
     $generate_report = isset($_POST['generate_report']) ? true : false;
     $from_date = null;
-    if ( isset($_POST['from_date'])) {
-        $fromDateString = filter_input(INPUT_POST, 'from_date', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-        try {
-            $from_date = new DateTime($fromDateString);
-            logit(sprintf("From_date: ", $fromDateString));
-        } catch (Exception $e) {
-            // Handle the case where the from_date is not a valid date format
-            echo "Error: Invalid 'from date' format.";
-            // Optionally, you could set $fromDate to a default value or log the error
-        }
-    } else {
-        $fromDateString = null;
-    }
     $to_date = null;
-    if ( isset($_POST['to_date'])) {
-        $toDateString = filter_input(INPUT_POST, 'to_date', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-        try {
-            $to_date = new DateTime($toDateString);
-            logit(sprintf("to_date: ", $toDateString));
-        } catch (Exception $e) {
-            // Handle the case where the from_date is not a valid date format
-            echo "Error: Invalid 'to date' format.";
-            // Optionally, you could set $fromDate to a default value or log the error
+    $fromDateString = null;
+    $toDateString = null;
+    if ( $content_type !== 'team'){
+        if ( isset($_POST['from_date'])) {
+            $fromDateString = filter_input(INPUT_POST, 'from_date', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+            try {
+                $from_date = new DateTime($fromDateString);
+                logit(sprintf("From_date: ", $fromDateString));
+            } catch (Exception $e) {
+                // Handle the case where the from_date is not a valid date format
+                echo "Error: Invalid 'from date' format.";
+                // Optionally, you could set $fromDate to a default value or log the error
+            }
         }
-    } else {
-        $toDateString = null;
+        if ( isset($_POST['to_date'])) {
+            $toDateString = filter_input(INPUT_POST, 'to_date', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+            try {
+                $to_date = new DateTime($toDateString);
+                logit(sprintf("to_date: ", $toDateString));
+            } catch (Exception $e) {
+                // Handle the case where the from_date is not a valid date format
+                echo "Error: Invalid 'to date' format.";
+                // Optionally, you could set $fromDate to a default value or log the error
+            }
+        }
     }
-    $options = array();
-    $options['images'] = $images;
+    //$options = array();
+    //$options['images'] = $images;
     //$options['links_internal'] = $links_internal;
     //$options['links_external'] = $links_external;
 
@@ -1106,6 +1139,7 @@ function act_load_pages_posts_process() {
     }
     // 
     $total_items = count($all_content);
+    error_log('total_items: '. $total_items);
     foreach ($all_content as $content) {
         logit(sprintf('Processing %s %d of %d...', $content_type, ++$processed_count, $total_items));
         $processed_content[] = act_load_pages_posts_process_content($content, $base_url, $report, $source, $processed_images);

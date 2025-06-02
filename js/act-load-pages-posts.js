@@ -1,5 +1,14 @@
 jQuery(document).ready(function($) {
     function onmethod(){
+        let type = $('#content_type').val();
+        if ( type === 'team'){
+            $('.DATE_ENTRY').css({display:'none'});
+            $('#method').val('all');
+            $('#method').prop('disabled', true);
+        } else {
+            $('#method').val('all');
+            $('#method').prop('disabled', false);
+        }
         let val = $('#method').val();
         console.log('val: ' + val);
         switch(val){
@@ -7,7 +16,9 @@ jQuery(document).ready(function($) {
                 console.log('all selected');
                 $('.ID_entry').css({display:'none'});
                 $('.URL_entry').css({display:'none'});
-                $('.DATE_ENTRY').css({display:'block'});
+                if ( type != 'team'){
+                    $('.DATE_ENTRY').css({display:'block'});
+                }
                 break;
             case 'slug':
                 console.log('slug selected');
@@ -17,8 +28,14 @@ jQuery(document).ready(function($) {
                 break;
         }
     }
+    function ontype(){
+
+    }
     console.log('In act-load-pages-posts.js');
     $('#method').on('change', function() {
+        onmethod();
+    });
+    $('#content_type').on('change',function() {
         onmethod();
     });
     $('#url').on('change', function(){

@@ -29,7 +29,8 @@
                 <th scope="row"><label for="content_type">Content Type:</label></th>
                 <td>
                     <select name="content_type" id="content_type">
-                        <option value="post">Post</option>
+                        <option value="post" selected>Post</option>
+                        <option value="team">Team</option>
                         <option value="page">Page</option>
                     </select>
                 </td>
@@ -38,8 +39,8 @@
                 <th scope="row"><label for="method">Method:</label></th>
                 <td>
                     <select id="method" name="method">
-                        <option value="all">All</option>
-                        <option value="slug" selected>URL/slug</option>
+                        <option value="all" selected>All</option>
+                        <option value="slug">URL/slug</option>
                     </select>
                 </td>
             </tr>
@@ -60,6 +61,7 @@
                     <input name="slug" id="slug" width="150"/>
                 </td>
             </tr>
+<!--
             <tr>
                 <th scope="row"><label for="images">Images:</label></th>
                 <td>
@@ -70,6 +72,7 @@
                     </select>
                 </td>
             </tr>
+-->
             <tr>
                 <th scope="row"><label for="insert_posts">Insert Pages/Posts:</label></th>
                 <td>
