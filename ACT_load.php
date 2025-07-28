@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ACT Load
  * Plugin URI:  https://sites.stringerhj.co.uk/ACT/WP_plugins/ACT_load/html/ACT_load.html
- * Description: Loads content from JSON URLs, exiting pages/posts
+ * Description: Loads content from JSON URLs, exis  ting pages/posts
  * Version: 1.0.0
  * Author: Julian Stringer
  * Author URI: // (Optional: URL to your website)

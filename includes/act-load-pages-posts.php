@@ -422,17 +422,33 @@ function get_remote_media_url( $media, $base_url){
     }
     return null;
 }
-function act_load_pages_posts_fetch_all_wp_rest($base_url, $post_type = 'post', $from_date = null, $to_date = null) {
+function formrestheaders($credentials){
+    $api_user = $credentials['username'];
+    $app_password = $credentials['password']; // Paste exactly what was generated
+    $user_password = $api_user.':'.$app_password;
+    error_log('user_password: '.$user_password);
+    $auth_header = 'Basic ' . base64_encode($user_password);
+
+    $args = [
+        'headers' => [
+            'Authorization' => $auth_header,
+        ],
+    ];
+    return $args;
+}
+function act_load_pages_posts_fetch_all_wp_rest($credentials, $post_type = 'post', $from_date = null, $to_date = null) {
     $all_posts = array();
     $page = 1;
     $local_post_type = $post_type;
     if ( $post_type !== 'team'){
         $local_post_type .= 's';
     }
-    $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $local_post_type . '?page=' . $page;
-
+    $base_url = $credentials['site_url'];
+    $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $local_post_type . '?page=' . $page . '&context=edit';
+    $args = formrestheaders($credentials);
+    error_log('args: '.var_export($args, true));
     do {
-        $response = wp_remote_get($endpoint);
+        $response = wp_remote_get($endpoint, $args);
         error_log('endpoint: '.$endpoint);
         if (is_wp_error($response)) {
             error_log('Error; '.$response->get_error_message());
@@ -457,7 +473,7 @@ function act_load_pages_posts_fetch_all_wp_rest($base_url, $post_type = 'post', 
         if (isset($headers['x-wp-totalpages'])) {
             $total_pages = intval($headers['x-wp-totalpages']);
             $page++;
-            $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $local_post_type . '?page=' . $page;
+            $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $local_post_type . '?page=' . $page .'&context=edit';
         } else {
             break; // No pagination headers
         }
@@ -497,9 +513,11 @@ function act_load_pages_posts_fetch_all_wp_rest($base_url, $post_type = 'post', 
     return $all_posts;
 }
 
-function act_load_pages_posts_fetch_single_wp_rest($base_url, $post_id, $post_type = 'post') {
-    $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $post_type . 's/' . $post_id;
-    $response = wp_remote_get($endpoint);
+function act_load_pages_posts_fetch_single_wp_rest($credentials, $post_id, $post_type = 'post') {
+    $base_url = $credentials['site_url'];
+    $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $post_type . 's/' . $post_id . '?context=edit';
+    $args = formrestheaders($credentials);
+    $response = wp_remote_get($endpoint, $args);
 
     if (is_wp_error($response)) {
         return 'Error: ' . $response->get_error_message();
@@ -523,9 +541,11 @@ function act_load_pages_posts_fetch_single_wp_rest($base_url, $post_id, $post_ty
 //    );
     return $data;
 }
-function act_load_pages_posts_fetch_single_wp_rest_by_slug($base_url, $slug, $post_type = 'post') {
-    $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $post_type . 's/?slug=' . $slug;
-    $response = wp_remote_get($endpoint);
+function act_load_pages_posts_fetch_single_wp_rest_by_slug($credentials, $slug, $post_type = 'post') {
+    $base_url = $credentials['site_url'];
+    $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $post_type . 's/?slug=' . $slug. '&context=edit';
+    $args = formrestheaders();
+    $response = wp_remote_get($endpoint, $args);
 
     if (is_wp_error($response)) {
         return 'Error: ' . $response->get_error_message();
@@ -821,23 +841,22 @@ function act_load_pages_posts_transform_links($dom, $base_url, &$report, $source
  * @return array|false An array of comment data, or false on failure.
  * Each comment array is structured for easy mapping to wp_insert_comment.
  */
-function process_comments($old_post_id, $base_url, &$report) { // Renamed parameter to $base_url
+function process_comments($old_post_id, $credentials, &$report) { // Renamed parameter to $base_url
+    $base_url = $credentials['site_url'];
     $comments_url_base = esc_url_raw($base_url . '/wp-json/wp/v2/comments?post=' . $old_post_id . '&per_page=100');
-    $comments_url_base .= '&orderby=id&order=asc'; // Crucial for reliable parent/child processing order
+    $comments_url_base .= '&orderby=id&order=asc&context=edit'; // Crucial for reliable parent/child processing order
 
     $all_remote_comments = [];
     $page = 1;
     $has_more_pages = true;
 
-    $args = array(
-        'timeout' => 45, // Increased timeout for potentially large responses
-        'headers' => array(),
-    );
+    $args = formrestheaders($credentials);
+    $args['timeout'] = 45; // Increased timeout for potentially large responses
 
     // Add API authentication if defined (still using constants for credentials as they are less dynamic)
-    if (defined('OLD_API_USERNAME') && defined('OLD_API_PASSWORD')) {
-        $args['headers']['Authorization'] = 'Basic ' . base64_encode(OLD_API_USERNAME . ':' . OLD_API_PASSWORD);
-    }
+  //  if (defined('OLD_API_USERNAME') && defined('OLD_API_PASSWORD')) {
+  //      $args['headers']['Authorization'] = 'Basic ' . base64_encode(OLD_API_USERNAME . ':' . OLD_API_PASSWORD);
+  //  }
 
     report_li($report, sprintf("Starting comment fetch for old post ID %d from %s...", $old_post_id, $base_url)); // Using $base_url in log
 
@@ -890,7 +909,8 @@ function process_comments($old_post_id, $base_url, &$report) { // Renamed parame
             'comment_author'       => $old_comment_arr['author_name'],
             'comment_author_email' => isset($old_comment_arr['author_email']) ? $old_comment_arr['author_email'] : '',
             'comment_author_url'   => $old_comment_arr['author_url'],
-            'comment_content'      => $old_comment_arr['content']['rendered'],
+//            'comment_content'      => $old_comment_arr['content']['rendered'],
+            'comment_content' => $old_comment_arr['content']['raw'] ?? $old_comment_arr['content']['rendered'],
             'comment_type'         => $old_comment_arr['type'],
             'user_id'              => (int)$old_comment_arr['author'],
             'comment_author_IP'    => isset($old_comment_arr['author_ip']) ? $old_comment_arr['author_ip'] : '',
@@ -965,7 +985,8 @@ function delete_post_comments($post_id, &$report) {
         return true;
     }
 }
-function act_load_pages_posts_process_content($content, $base_url, &$report, $source, &$processed_images) {
+function act_load_pages_posts_process_content($content, $credentials, &$report, $source, &$processed_images) {
+    $base_url = $credentials['site_url'];
     // Grab bits needed at end for reassembly
     $title = $content['title']['rendered'];
     $author = $content['author'];
@@ -994,7 +1015,10 @@ function act_load_pages_posts_process_content($content, $base_url, &$report, $so
     report_li($report, $slug);
     $report[] = '<ul>';
     $dom = new DOMDocument();
-    @$dom->loadHTML('<?xml encoding="UTF-8">' . $content['content']['rendered']);
+    // Suppress warnings from malformed HTML
+    libxml_use_internal_errors(true);
+
+    @$dom->loadHTML(mb_convert_encoding($content['content']['raw'],  'HTML-ENTITIES', 'UTF-8'));
 
     act_load_pages_posts_transform_images($dom, $report, $processed_images);
     act_load_pages_posts_transform_links($dom, $base_url, $report, $source);
@@ -1032,14 +1056,21 @@ function act_load_pages_posts_process_content($content, $base_url, &$report, $so
     // process comments
 
     $report[] = '</ul>';
-    $comments = process_comments($content['id'], $base_url, $report);
+    $comments = process_comments($content['id'], $credentials, $report);
     $post_date = date('Y-m-d H:i:s', strtotime($date));
     $post_date_gmt = date('Y-m-d H:i:s', strtotime($date_gmt));
 
     error_log(sprintf("End of act_load_pages_process_content featured_media: %s", var_export($featured_media, true)));
+    // Get just the body inner HTML
+    $body = $dom->getElementsByTagName('body')->item(0);
+    $innerHTML = '';
+    foreach ($body->childNodes as $child) {
+        $innerHTML .= $dom->saveHTML($child);
+    }
+    $content = $innerHTML;
     $result = array(
         'title' => $title,
-        'content' => $dom->saveHTML(),
+        'content' => $content,
         'author' => $author,
         'type' => $type,
         'slug' => $slug,
@@ -1106,12 +1137,20 @@ function act_load_pages_posts_process() {
     //$options['links_internal'] = $links_internal;
     //$options['links_external'] = $links_external;
 
-    // Set base URLs
-    $act_base_url = 'https://actionclimateteignbridge.org/oldsite'; // Replace with your ACT base URL
-    $ww_base_url = 'https://ww.actionclimateteignbridge.org'; // Replace with your WW base URL
+    // Set credentials
+    $act_credentials = [
+        'site_url' => 'https://actionclimateteignbridge.org/oldsite',
+        'username' => 'apimigrator',
+        'password' => 'YKbx f4mI AcY4 uBKW qFMl Fqgj',
+    ];
+    $ww_credentials = [
+        'site_url' => 'https://ww.actionclimateteignbridge.org',
+        'username' => 'apimigrator',
+        'password' => 'nf1J pd8d HBHE nymU 0Z3f Nn6Z',
+    ];
 
-    $base_url = ($source === 'ACT') ? $act_base_url : $ww_base_url;
-    init_category_conversion( $base_url );
+    $credentials = ($source === 'ACT') ? $act_credentials : $ww_credentials;
+    init_category_conversion( $credentials['site_url'] );
 
     $processed_content = array(); // Array to store processed content
     $report = array(); // Array to store report messages
@@ -1125,13 +1164,13 @@ function act_load_pages_posts_process() {
     // Process based on input
     if ($method === 'all') {
         // Process all posts/pages
-        $all_content = act_load_pages_posts_fetch_all_wp_rest($base_url, $content_type, $from_date, $to_date);
+        $all_content = act_load_pages_posts_fetch_all_wp_rest($credentials, $content_type, $from_date, $to_date);
         $total_items = count($all_content);
     } elseif ($method === 'slug') {
         // ... fetch by slug ...
         $total_items = 1;
         logit(sprintf('Loading %s with slug: %s...', $content_type, $slug));
-        $all_content = act_load_pages_posts_fetch_single_wp_rest_by_slug($base_url, $slug, $content_type);
+        $all_content = act_load_pages_posts_fetch_single_wp_rest_by_slug($credentials, $slug, $content_type);
         if ( count($all_content) == 0 ) {
             error_log(sprintf('Could not find %s with slug: %s', $content_type, $slug));
             report_li($report, sprintf('Could not find %s with slug: %s', $content_type, $slug));
@@ -1142,7 +1181,7 @@ function act_load_pages_posts_process() {
     error_log('total_items: '. $total_items);
     foreach ($all_content as $content) {
         logit(sprintf('Processing %s %d of %d...', $content_type, ++$processed_count, $total_items));
-        $processed_content[] = act_load_pages_posts_process_content($content, $base_url, $report, $source, $processed_images);
+        $processed_content[] = act_load_pages_posts_process_content($content, $credentials, $report, $source, $processed_images);
     }
     error_log(' ========================================================== insertion phase =========================================================');
     // Insert posts/pages (if enabled)
