@@ -365,35 +365,41 @@ function transform_and_upload_image($src, &$report){
     }
     return $result;
 }
+function transform_image($img, &$report, &$processed_images){
+    $src = $img->getAttribute('src');
+    $alt = $img->getAttribute('alt');
+
+    // List image
+    report_li($report, "Image found: src=" . esc_html($src) . ", alt=" . esc_html($alt));
+
+    // Check if image has already been processed
+    if (in_array($src, $processed_images)) {
+        return; // Skip if already processed
+    }
+
+    // Download image
+    $upload = transform_and_upload_image($src, $report);
+    if ( !isset($upload['attach_id'])){
+        report_li($report, sprintf("Error uploading image %s", $src));
+        //var_dump($upload);
+    } else {
+        $attach_id = $upload['attach_id'];
+    }
+    if ( isset($upload['src'])){
+        $img->setAttribute('src', $upload['src']);
+    }
+    $processed_images[] = $src; // Add to processed images
+
+}
+/*
 function act_load_pages_posts_transform_images($dom, &$report, &$processed_images) {
     $imgs = $dom->getElementsByTagName('img');
     foreach ($imgs as $img) {
-        $src = $img->getAttribute('src');
-        $alt = $img->getAttribute('alt');
-
-        // List image
-        report_li($report, "Image found: src=" . esc_html($src) . ", alt=" . esc_html($alt));
-
-        // Check if image has already been processed
-        if (in_array($src, $processed_images)) {
-            continue; // Skip if already processed
-        }
-
-        // Download image
-        $upload = transform_and_upload_image($src, $report);
-        if ( !isset($upload['attach_id'])){
-            report_li($report, sprintf("Error uploading image %s", $src));
-            //var_dump($upload);
-        } else {
-            $attach_id = $upload['attach_id'];
-        }
-        if ( isset($upload['src'])){
-            $img->setAttribute('src', $upload['src']);
-        }
-        $processed_images[] = $src; // Add to processed images
+        transform_image($img, &$report, &$processed_images);
     }
     return $dom;
 }
+*/
 function get_remote_media_item( $id, $base_url ) {
     $url = trailingslashit( $base_url ) . 'wp-json/wp/v2/media/' . $id;
     $response = wp_remote_get( $url );
@@ -732,29 +738,26 @@ function moveupload($href, &$report) {
     report_li( $report, "Moved '{$href}' (fetched from URL) to media library. New URL: '{$new_href}'");
     return $new_href;
 }
-function act_load_pages_posts_transform_links($dom, $base_url, &$report, $source) {
-    $links = $dom->getElementsByTagName('a');
-    foreach ($links as $link) {
-        $href = $link->getAttribute('href');
-        logit(sprintf("processing link href: %s", $href));
-        if (preg_match('/^(http|https):\/\//', $href)) { // External link
-            $domain = parse_url($href, PHP_URL_HOST);
-            logit(sprintf("domain: %s", $domain));
-            if (strpos($domain, 'actionclimateteignbridge.org') === false && !preg_match('/\.actionclimateteignbridge\.org$/', $domain)) {
-                // External link: Check and Report
+function transform_link($link,&$report){
+    $href = $link->getAttribute('href');
+    logit(sprintf("processing link href: %s", $href));
+    if (preg_match('/^(http|https):\/\//', $href)) { // External link
+        $domain = parse_url($href, PHP_URL_HOST);
+        logit(sprintf("domain: %s", $domain));
+        if (strpos($domain, 'actionclimateteignbridge.org') === false && !preg_match('/\.actionclimateteignbridge\.org$/', $domain)) {
+            // External link: Check and Report
+            $full_url = $href;
+        } else { // Internal link: Transform and Report
+            // this needs to consider:
+            // source WW: prepending WW to href
+            // source CC: prepending CC to href
+            // source /newsite/page.php/*/ just slug
+            // source /oldsite/wp-content/uploads move file to attachments
+            $path = parse_url($href, PHP_URL_PATH);
+            if ( $path === null || $path === false ){
                 $full_url = $href;
-            } else { // Internal link: Transform and Report
-                // this needs to consider:
-                // source WW: prepending WW to href
-                // source CC: prepending CC to href
-                // source /newsite/page.php/*/ just slug
-                // source /oldsite/wp-content/uploads move file to attachments
-                $path = parse_url($href, PHP_URL_PATH);
-                if ( $path === null || $path === false ){
-                    $full_url = $href;
-                    // domain only specified
-                    continue;
-                }
+                // domain only specified
+            } else {
                 logit(sprintf("path: %s", $path));
                 $query_params_string = parse_url($href, PHP_URL_QUERY);
                 $query_params = [];
@@ -808,29 +811,80 @@ function act_load_pages_posts_transform_links($dom, $base_url, &$report, $source
                     $link->textContent = $full_url;
                 }
             }
-        } else { // Relative link
-            // No transformation needed, report
-            report_li($report, "Internal link: " . esc_html($href));
-            $full_url = home_url($href);
         }
-        // 
-        //
-        // always test links for accessibility
-        //
-        $response = wp_remote_head($full_url);
-        //logit("response to wp_remote_head test: ". var_export($response, true));
-        if ( is_wp_error($response)){
-            report_li($report, "Link in error ". esc_url($full_url));
-            logit(sprintf("Link in error %s", $full_url));
-        } else {
-            $rcode = wp_remote_retrieve_response_code($response);
-            if ( $rcode !== 200) {
-                report_li($report, "Link inaccessible: " . esc_html($full_url). " response code: ". $rcode);
-            }
-            logit(sprintf("Response code %d url: %s", $rcode, $full_url));
+    } else { // Relative link
+        // No transformation needed, report
+        report_li($report, "Internal link: " . esc_html($href));
+        $full_url = home_url($href);
+    }
+    // 
+    //
+    // always test links for accessibility
+    //
+    $response = wp_remote_head($full_url);
+    //logit("response to wp_remote_head test: ". var_export($response, true));
+    if ( is_wp_error($response)){
+        report_li($report, "Link in error ". esc_url($full_url));
+        logit(sprintf("Link in error %s", $full_url));
+    } else {
+        $rcode = wp_remote_retrieve_response_code($response);
+        if ( $rcode !== 200) {
+            report_li($report, "Link inaccessible: " . esc_html($full_url). " response code: ". $rcode);
         }
+        logit(sprintf("Response code %d url: %s", $rcode, $full_url));
+    }
+
+}
+/*
+function act_load_pages_posts_transform_links($dom, &$report) {
+    $links = $dom->getElementsByTagName('a');
+    foreach ($links as $link) {
+        transform_link($link, &$report);
     }
 }
+*/
+function act_load_pages_posts_transform_links($content, &$report) {
+    libxml_use_internal_errors(true); // suppress DOM warnings
+
+    $content = preg_replace_callback('/<a\s[^>]*>.*?<\/a>/is', function ($matches) use (&$report) {
+        $a_html = $matches[0];
+
+        $doc = new DOMDocument();
+        $doc->loadHTML('<?xml encoding="utf-8" ?>' . $a_html);
+        $link = $doc->getElementsByTagName('a')->item(0);
+
+        if ($link) {
+            transform_link($link, $report);
+            return $doc->saveHTML($link);
+        }
+
+        return $a_html; // fallback
+    }, $content);
+
+    return $content;
+}
+
+function act_load_pages_posts_transform_images($content, &$report, &$processed_images) {
+    libxml_use_internal_errors(true); // suppress DOM warnings
+
+    $content = preg_replace_callback('/<img[^>]*>/i', function ($matches) use (&$report, &$processed_images) {
+        $img_html = $matches[0];
+
+        $doc = new DOMDocument();
+        $doc->loadHTML('<?xml encoding="utf-8" ?>' . $img_html); // ensure UTF-8
+        $img = $doc->getElementsByTagName('img')->item(0);
+
+        if ($img) {
+            transform_image($img, $report, $processed_images);
+            return $doc->saveHTML($img); // return modified <img>
+        }
+
+        return $img_html; // fallback
+    }, $content);
+
+    return $content;
+}
+
 /**
  * Fetches comments for a given old post ID from the remote WordPress REST API
  * and prepares them for insertion into the new site.
@@ -1014,14 +1068,17 @@ function act_load_pages_posts_process_content($content, $credentials, &$report, 
     }
     report_li($report, $slug);
     $report[] = '<ul>';
-    $dom = new DOMDocument();
+    //$dom = new DOMDocument();
     // Suppress warnings from malformed HTML
     libxml_use_internal_errors(true);
 
-    @$dom->loadHTML(mb_convert_encoding($content['content']['raw'],  'HTML-ENTITIES', 'UTF-8'));
-
-    act_load_pages_posts_transform_images($dom, $report, $processed_images);
-    act_load_pages_posts_transform_links($dom, $base_url, $report, $source);
+    //@$dom->loadHTML(mb_convert_encoding($content['content']['raw'],  'HTML-ENTITIES', 'UTF-8'));
+    $content_raw = $content['content']['raw'];
+    //error_log('Initial content_raw: '. $content_raw);
+    $content_raw = act_load_pages_posts_transform_images($content_raw, $report, $processed_images);
+    //error_log('after images content_raw: '. $content_raw);
+    $content_raw = act_load_pages_posts_transform_links($content_raw, $report);
+    //error_log('after links content_raw: '. $content_raw);
     if ( $featured_media != 0 ){
         error_log(sprintf("Featured media %d", $featured_media));
         // get original featured media
@@ -1062,15 +1119,15 @@ function act_load_pages_posts_process_content($content, $credentials, &$report, 
 
     error_log(sprintf("End of act_load_pages_process_content featured_media: %s", var_export($featured_media, true)));
     // Get just the body inner HTML
-    $body = $dom->getElementsByTagName('body')->item(0);
-    $innerHTML = '';
-    foreach ($body->childNodes as $child) {
-        $innerHTML .= $dom->saveHTML($child);
-    }
-    $content = $innerHTML;
+    //$body = $dom->getElementsByTagName('body')->item(0);
+    //$innerHTML = '';
+    //foreach ($body->childNodes as $child) {
+    //    $innerHTML .= $dom->saveHTML($child);
+    //}
+    //$content = $innerHTML;
     $result = array(
         'title' => $title,
-        'content' => $content,
+        'content' => $content_raw,
         'author' => $author,
         'type' => $type,
         'slug' => $slug,
