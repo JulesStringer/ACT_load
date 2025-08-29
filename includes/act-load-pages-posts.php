@@ -108,13 +108,26 @@ function remove_orphaned_resized_images( $base_filename, $upload_dir = null ) {
     $name = $info['filename']; // e.g. Wood-burner
     $ext  = isset($info['extension']) ? $info['extension'] : 'jpg';
 
+    // Check for base file
+    $filepath = $upload_dir.'/'.$name.'.'.$ext;
+    if (file_exists($filepath)) {
+        error_log($name.' existed so deleted');
+        unlink($filepath);
+    } else {
+        error_log('File does NOT EXIST '.$filepath);
+    }
     // Glob all variants with WxH suffix
     $pattern = sprintf('%s/%s-*x*.%s', $upload_dir, $name, $ext);
     $files   = glob( $pattern );
 
     foreach ( $files as $file ) {
-        error_log("Deleting orphaned file: $file");
-        @unlink( $file );
+        // Match only "exact-name-WxH.ext"
+        $regex = sprintf('/^%s-\d+x\d+\.%s$/i', preg_quote($name, '/'), preg_quote($ext, '/'));
+        $basename = basename($file);
+        if (preg_match($regex, $basename)) {
+            error_log("Deleting orphaned file: $file");
+            @unlink( $file );
+        }
     }
 }
 function search_for( $search_filename ){
@@ -180,10 +193,14 @@ function transform_and_upload_image($src, &$report, $content_type, $site_url){
     $filename = $prefix . $fileinfo['filename']; // . '-' . $fileinfo['extension'];
     $suffix = $fileinfo['extension'];
     $search_filename = strtolower(sanitize_file_name($filename)).'-'.$suffix;
+    // This gets round wp_unique_filename suffixing any name containing scaled or rotated with -1
+    $search_filename = str_replace('scaled','scaaled',$search_filename);
+    $search_filename = str_replace('rotated','rotaated',$search_filename);
     // test if image has already been uploaded by WordPress's default slug
     $result = search_for( $search_filename );
-    if ( $result === null ){
-        $search_filename = preg_replace('/-\d+x\d+(?=-[a-z0-9]+$)/', '', $search_filename);
+    $pattern = '/-\d+x\d+(?=-[a-z0-9]+$)/';
+    if ( $result === null && preg_match($pattern, $search_filename) > 0){
+        $search_filename = preg_replace($pattern, '', $search_filename);
         $result = search_for($search_filename );
     }
     if ( $result === null ){
@@ -219,7 +236,7 @@ function transform_and_upload_image($src, &$report, $content_type, $site_url){
                 remove_orphaned_resized_images( $fullfilename );
                 // Use wp_upload_bits to save the file
                 $upload_file = wp_upload_bits($fullfilename, null, file_get_contents($resized_file));
-
+                error_log(('$upload_file '.var_export($upload_file, true)));
                 if ($upload_file['error']) {
                     error_log("Error uploading image: " . esc_html($src) . " - " . $upload_file['error']);
                 } else {
