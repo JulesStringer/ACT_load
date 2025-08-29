@@ -6,7 +6,7 @@ jQuery(document).ready(function($) {
             $('#method').val('all');
             $('#method').prop('disabled', true);
         } else {
-            $('#method').val('all');
+            //$('#method').val('all');
             $('#method').prop('disabled', false);
         }
         let val = $('#method').val();

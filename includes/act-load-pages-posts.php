@@ -30,9 +30,6 @@ function file_from_image( $image, $suffix){
 }
 function act_load_pages_posts_resize_image($image_content) {
     try {
-//        $temp_file = tempnam(sys_get_temp_dir(), 'img');
-//        report_li($report, "temp_file %s", $temp_file);
-//        file_put_contents($temp_file, $image_content);
         $image = imagecreatefromstring($image_content);
         if (!$image) {
             return false;
@@ -100,272 +97,226 @@ function set_media_category($attach_id, $category_name, &$report){
         }
     }
 }
-function get_attachment_matching($sanitized_filename){
-    // Search for attachments with a post_name that *starts with* the sanitized filename
-    $all_attachments = get_posts(array(
-        'post_type' => 'attachment',
-        'posts_per_page' => -1, // Retrieve all attachments (use with caution on large sites)
-        'fields' => 'ids',
-    ));
+function remove_orphaned_resized_images( $base_filename, $upload_dir = null ) {
+    // Get upload dir
+    if ( !$upload_dir ) {
+        $upload_dir = wp_get_upload_dir()['basedir'];
+    }
 
-    if ($all_attachments) {
-        foreach ($all_attachments as $attach_id) {
-            $post = get_post($attach_id);
-            if (strpos($post->post_name, $sanitized_filename) === 0) {
-                $result['attach_id'] = $attach_id;
-                $result['src'] = wp_get_attachment_url($attach_id);
-                report_li( $report, sprintf("Existing attachment found (slug starts with): %d %s (based on filename %s)", $attach_id, $result['src'], $sanitized_filename));
-                return $result;
-            }
-        }
+    // Remove extension, just work with base
+    $info = pathinfo( $base_filename );
+    $name = $info['filename']; // e.g. Wood-burner
+    $ext  = isset($info['extension']) ? $info['extension'] : 'jpg';
+
+    // Glob all variants with WxH suffix
+    $pattern = sprintf('%s/%s-*x*.%s', $upload_dir, $name, $ext);
+    $files   = glob( $pattern );
+
+    foreach ( $files as $file ) {
+        error_log("Deleting orphaned file: $file");
+        @unlink( $file );
+    }
+}
+function search_for( $search_filename ){
+    error_log('Looking for ' . $search_filename);
+    $existing_attachments = get_posts(array(
+        'post_type'      => 'attachment',
+        'name'     => $search_filename, // Search by slug (filename without extension)
+        'posts_per_page' => 1,
+        'fields'         => 'ids',
+        'meta_query'     => array( // Ensure it's an image attachment, not another post type with same slug
+            array(
+                'key'     => '_wp_attachment_metadata',
+                'compare' => 'EXISTS',
+            ),
+        ),
+    ));
+    if ( ! empty($existing_attachments) ){
+        $result = array();
+        $result['attach_id'] = $existing_attachments[0];
+        $result['src'] = wp_get_attachment_url($result['attach_id']);
+        error_log(sprintf("Image already uploaded as attachment %d %s", $result['attach_id'], $result['src']));
+        return $result;
     }
     return null;
 }
-function transform_and_upload_image_old($src, &$report){
+function reform_original_image_url($src){
+// in some cases get image paths like which needs WxH at end removing
+//https://actionclimateteignbridge.org/oldsite/wp-content/uploads/2021/09/Screenshot-2021-09-14-at-01.26.24-288x300.png
+// Image not found, proceed with new upload
+    $fileinfo = pathinfo($src);
+    $filename = $fileinfo['filename'];
+    error_log('raw filename : '.$filename);
+    $filename = preg_replace('/-\d+x\d+$/', '', $filename);
+    error_log('Tidy filename: '.$filename);
+    $image_url = $fileinfo['dirname'].'/'.$filename.'.'.$fileinfo['extension'];
+    return $image_url;
+}
+function transform_and_upload_image($src, &$report, $content_type, $site_url){
+    //error_log('transform_and_upload_image $content_type '.$content_type. ' site_url: '.$site_url);
     // Download image
     $attach_id = 0;
-    $result = array(
-        'attach_id' => $attach_id
-    );
-    $image_data = wp_remote_get($src);
-    if (is_wp_error($image_data)) {
-        report_li($report, "Error downloading image: " . esc_html($src));
-    } else {
-        $fileinfo = pathinfo($src);
-        $filename = $fileinfo['filename'];
-        $sanitized_filename = strtolower(sanitize_file_name($filename));
-        report_li( $report, sprintf("Looking for existing %s", $sanitized_filename));
-        // test if image has already been uploaded
-        $existing_attachments = get_posts(array(
-            'post_type' => 'attachment',
-            'name' => $sanitized_filename, // Search by slug (filename without extension)
-            'posts_per_page' => 1,
-            'fields' => 'ids',
-        ));
-        if ( $existing_attachments && count($existing_attachments) > 0 ){
-            $result['attach_id'] = $existing_attachments[0];
-            $result['src'] = wp_get_attachment_url($result['attach_id']);
-            report_li( $report, sprintf("Image already uploaded as attachment %d %s", $result['attach_id'], $result['src']));
-        } else {
-            $result2 = get_attachment_matching($sanitized_filename);
-            if ( $result2 !== null ){
-                $result = $result2;
-                report_li( $report, sprintf("Image with near matching name %d %s found", $result['attach_id'], $result['src']));
-            } else {
-                $result = array(
-                );
-                $image_content = wp_remote_retrieve_body($image_data);
+    $a = explode('?', $src);
+    $src = $a[0];
 
-                // Convert resize image
-                $resized = act_load_pages_posts_resize_image($image_content);
-                if ($resized) {
-                    // Upload to media library
-                    $suffix = $resized['suffix'];
-                    $resized_file = $resized['file'];
-                    //report_li( $report, sprintf("image pathinfo %s", var_export($info, true)));
+    if ( !str_starts_with($src, $site_url)){
+        error_log('Url not on source so not moving '.$src );
+        $result = array();
+        $result['attach_id'] = 0;
+        $result['src'] = $src;
+        return $result;
+    }
 
-                    $upload_file = wp_upload_bits($filename. '.'.$suffix, null, file_get_contents($resized_file));
-
-                    if ($upload_file['error']) {
-                        report_li($report, "Error uploading image: " . esc_html($src) . " - " . $upload_file['error']);
-                    } else {
-                        $attachment = array(
-                            'guid' => $upload_file['url'],
-                            'post_mime_type' => 'image/'.$suffix,
-                            'post_title' => basename($upload_file['file']),
-                            'post_content' => '',
-                            'post_status' => 'inherit'
-                        );
-                        report_li($report, 'Attachment details: '. var_export($attachment, true));
-                        $attach_id = wp_insert_attachment($attachment, 0);
-                        report_li($report, sprintf("Created attachment %d %s from %s", $attach_id, $attachment['guid'], $src));
-                        if ($attach_id) {
-                            $result['attach_id'] = $attach_id;
-                            require_once(ABSPATH . 'wp-admin/includes/image.php');
-                            require_once(ABSPATH . 'wp-admin/includes/file.php');
-                            require_once(ABSPATH . 'wp-admin/includes/media.php');
-                            wp_update_attachment_metadata($attach_id, wp_generate_attachment_metadata($attach_id, $upload_file['file']));
-                            // ... after wp_update_attachment_metadata($attach_id, wp_generate_attachment_metadata($attach_id, $upload_file['file']));
-
-                            $main_image_path = get_attached_file($attach_id);
-                            error_log('--- Path Checks for ID ' . $attach_id . ' ---');
-                            error_log('Main Image Server Path (from get_attached_file): ' . $main_image_path);
-                            error_log('Main Image file_exists(): ' . (file_exists($main_image_path) ? 'Yes' : 'No'));
-                            error_log('Main Image is_readable(): ' . (is_readable($main_image_path) ? 'Yes' : 'No'));
-
-                            $metadata = wp_get_attachment_metadata($attach_id);
-                            if (isset($metadata['sizes']['thumbnail']['file'])) {
-                                $thumbnail_relative_filename = $metadata['sizes']['thumbnail']['file'];
-                                $thumbnail_server_path = dirname($main_image_path) . '/' . $thumbnail_relative_filename;
-
-                                error_log('Thumbnail Server Path: ' . $thumbnail_server_path);
-                                error_log('Thumbnail file_exists(): ' . (file_exists($thumbnail_server_path) ? 'Yes' : 'No'));
-                                error_log('Thumbnail is_readable(): ' . (is_readable($thumbnail_server_path) ? 'Yes' : 'No'));
-                            } else {
-                                error_log('Thumbnail size not found in metadata (should not happen given previous checks).');
-                            }
-                            error_log('--- End Path Checks ---');
-                            update_post_meta($attach_id, '_wp_attachment_image_alt', $attachment['post_title']);
-                            $new_src = wp_get_attachment_url($attach_id);
-                            $result['src'] = $new_src;
-                            report_li($report, "Image transformed and uploaded: " . esc_html($src) . " to: " . esc_html($new_src));
-                            set_media_category($attach_id, 'Post images', $report);
-                        } else {
-                            report_li($report, "Error inserting attachment: " . esc_html($src));
-                        }
-                    }
-                    unlink($resized_file);
-                }
-            }
+    $fileinfo = pathinfo($src);
+    // Extract year and date from directory
+    $directory = $fileinfo['dirname'];
+    $parts = explode('/',$directory);
+    $dirlength = count($parts);
+    $month = $parts[$dirlength - 1];
+    $year = $parts[$dirlength - 2];
+    $prefix = $year .'_'.$month.'_';
+    error_log('Extracted prefix '.$prefix);
+    // form filename
+    $filename = $prefix . $fileinfo['filename']; // . '-' . $fileinfo['extension'];
+    $suffix = $fileinfo['extension'];
+    $search_filename = strtolower(sanitize_file_name($filename)).'-'.$suffix;
+    // test if image has already been uploaded by WordPress's default slug
+    $result = search_for( $search_filename );
+    if ( $result === null ){
+        $search_filename = preg_replace('/-\d+x\d+(?=-[a-z0-9]+$)/', '', $search_filename);
+        $result = search_for($search_filename );
+    }
+    if ( $result === null ){
+        if ( $suffix === 'jpeg'){
+            $search_filename = str_replace('jpeg','jpg', $search_filename);
+            $result = search_for($search_filename );
+            $suffix = 'jpg';
         }
     }
-    return $result;
-}
-function transform_and_upload_image($src, &$report){
-    // Download image
-    $attach_id = 0;
-    $result = array(
-        'attach_id' => $attach_id
-    );
-    $image_data = wp_remote_get($src);
-    if (is_wp_error($image_data)) {
-        report_li($report, "Error downloading image: " . esc_html($src));
-    } else {
-        $fileinfo = pathinfo($src);
-        $filename = $fileinfo['filename'];
-        $sanitized_filename = strtolower(sanitize_file_name($filename));
-        report_li( $report, sprintf("Looking for existing %s", $sanitized_filename));
-
-        // test if image has already been uploaded by WordPress's default slug
-        $existing_attachments = get_posts(array(
-            'post_type'      => 'attachment',
-            'name'           => $sanitized_filename, // Search by slug (filename without extension)
-            'posts_per_page' => 1,
-            'fields'         => 'ids',
-            'meta_query'     => array( // Ensure it's an image attachment, not another post type with same slug
-                array(
-                    'key'     => '_wp_attachment_metadata',
-                    'compare' => 'EXISTS',
-                ),
-            ),
-        ));
-
-        if ( ! empty($existing_attachments) ){
-            $result['attach_id'] = $existing_attachments[0];
-            $result['src'] = wp_get_attachment_url($result['attach_id']);
-            error_log(sprintf("Image already uploaded as attachment %d %s", $result['attach_id'], $result['src']));
+    if ( $result === null ){
+        $result = array(
+            'attach_id' => 0
+        );
+        // form name of image to get from $src as input less WxH
+        error_log('Original $src:          '.$src);
+        $image_url = reform_original_image_url($src);
+        error_log('Getting image data for: '.$image_url);
+        $image_data = wp_remote_get($image_url);
+        if (is_wp_error($image_data)) {
+            report_li($report, "Error downloading image: " . esc_html($image_url));
         } else {
-            // Check for near matching name (your custom function)
-            $result2 = get_attachment_matching($sanitized_filename);
-            if ( $result2 !== null && isset($result2['attach_id']) ){ // Ensure 'attach_id' is set in result2
-                $result = $result2;
-                error_log(sprintf("Image with near matching name %d %s found", $result['attach_id'], $result['src']));
-            } else {
-                // Image not found, proceed with new upload
-                $image_content = wp_remote_retrieve_body($image_data);
+            $image_content = wp_remote_retrieve_body($image_data);
 
-                // Convert resize image
-                $resized = act_load_pages_posts_resize_image($image_content);
-                if ($resized) {
-                    // Upload to media library
-                    $suffix = $resized['suffix'];
-                    $resized_file = $resized['file'];
+            // Convert resize image
+            $resized = act_load_pages_posts_resize_image($image_content);
+            if ($resized) {
+                // Upload to media library
+                $suffix = $resized['suffix'];
+                $resized_file = $resized['file'];
+                // Now form sanitized name from searched for name
+                $fullfilename = str_replace('-'.$suffix, '.'.$suffix, $search_filename);
+                error_log('Removing orphaned resized '.$fullfilename);
+                remove_orphaned_resized_images( $fullfilename );
+                // Use wp_upload_bits to save the file
+                $upload_file = wp_upload_bits($fullfilename, null, file_get_contents($resized_file));
 
-                    // Use wp_upload_bits to save the file
-                    $upload_file = wp_upload_bits($filename. '.'.$suffix, null, file_get_contents($resized_file));
-
-                    if ($upload_file['error']) {
-                        error_log("Error uploading image: " . esc_html($src) . " - " . $upload_file['error']);
-                    } else {
-                        // --- CRITICAL: Determine the correct 'file' path for metadata ---
-                        // This path needs to be relative to the uploads base directory.
-                        // Since "Organize uploads..." is unchecked, subdir should be empty.
-                        // $upload_file['file'] contains the absolute path like '/var/www/.../uploads/my-image.jpg'
-                        // We need 'my-image.jpg' for metadata.
-                        $upload_dir_info = wp_upload_dir(); // Get current upload configuration
-                        $relative_file_path_for_metadata = ltrim( str_replace( $upload_dir_info['basedir'], '', $upload_file['file'] ), '/' );
-
-                        $attachment_array = array(
-                            'guid'           => $upload_file['url'], // Full URL to the original file
-                            'post_mime_type' => 'image/'.$suffix,
-                            'post_title'     => basename($upload_file['file']), // Title from filename
-                            'post_content'   => '',
-                            'post_status'    => 'inherit',
-                            'file'           => $relative_file_path_for_metadata, // THIS IS THE FIX: crucial for get_attached_file()
-                        );
-
-                        error_log('Attachment details for wp_insert_attachment: '. var_export($attachment_array, true));
-
-                        // Insert the attachment post into the database
-                        // Second argument to wp_insert_attachment is the absolute path to the file
-                        $attach_id = wp_insert_attachment($attachment_array, $upload_file['file']);
-
-                        if ($attach_id) {
-                            $result['attach_id'] = $attach_id;
-
-                            // Include necessary files for image processing
-                            require_once(ABSPATH . 'wp-admin/includes/image.php');
-                            require_once(ABSPATH . 'wp-admin/includes/file.php');
-                            require_once(ABSPATH . 'wp-admin/includes/media.php');
-
-                            // Generate/update metadata (including 'sizes' array)
-                            wp_update_attachment_metadata($attach_id, wp_generate_attachment_metadata($attach_id, $upload_file['file']));
-
-                            // --- Debug Path Checks (as provided by you) ---
-                            $main_image_path = get_attached_file($attach_id);
-                            error_log('--- Path Checks for ID ' . $attach_id . ' ---');
-                            error_log('Main Image Server Path (from get_attached_file): ' . $main_image_path);
-                            error_log('Main Image file_exists(): ' . (file_exists($main_image_path) ? 'Yes' : 'No'));
-                            error_log('Main Image is_readable(): ' . (is_readable($main_image_path) ? 'Yes' : 'No'));
-
-                            $metadata = wp_get_attachment_metadata($attach_id);
-                            if (isset($metadata['sizes']['thumbnail']['file'])) {
-                                $thumbnail_relative_filename = $metadata['sizes']['thumbnail']['file'];
-                                // Construct full server path to thumbnail
-                                $thumbnail_server_path = dirname($main_image_path) . '/' . $thumbnail_relative_filename;
-
-                                error_log('Thumbnail Server Path: ' . $thumbnail_server_path);
-                                error_log('Thumbnail file_exists(): ' . (file_exists($thumbnail_server_path) ? 'Yes' : 'No'));
-                                error_log('Thumbnail is_readable(): ' . (is_readable($thumbnail_server_path) ? 'Yes' : 'No'));
-                            } else {
-                                error_log('Thumbnail size not found in metadata (should not happen if generation succeeded).');
-                            }
-                            error_log('--- End Path Checks ---');
-                            // --- End Debug Path Checks ---
-
-                            // Set Alt Text (using the post title as fallback)
-                            $alt_text_to_set = get_the_title($attach_id);
-                            $alt_text_to_set = sanitize_text_field($alt_text_to_set);
-                            if (empty($alt_text_to_set)) {
-                                $alt_text_to_set = 'Image: ' . basename($upload_file['file']);
-                            }
-                            update_post_meta($attach_id, '_wp_attachment_image_alt', $alt_text_to_set);
-                            report_li($report, sprintf("Set alt text for attachment %d: \"%s\"", $attach_id, esc_html($alt_text_to_set)));
-
-                            // Get the final URL of the newly created attachment
-                            $new_src = wp_get_attachment_url($attach_id);
-                            $result['src'] = $new_src;
-                            report_li($report, "Image transformed and uploaded: " . esc_html($src) . " to: " . esc_html($new_src));
-
-                            // Set media category (your custom function)
-                            set_media_category($attach_id, 'Post images', $report);
-
-                        } else {
-                            report_li($report, "Error inserting attachment: " . esc_html($src) . " - wp_insert_attachment failed.");
-                        }
-
-                    }
-                    // Clean up the temporary resized file
-                    unlink($resized_file);
+                if ($upload_file['error']) {
+                    error_log("Error uploading image: " . esc_html($src) . " - " . $upload_file['error']);
                 } else {
-                    report_li($report, "Error resizing image: " . esc_html($src));
+                    // --- CRITICAL: Determine the correct 'file' path for metadata ---
+                    // This path needs to be relative to the uploads base directory.
+                    // Since "Organize uploads..." is unchecked, subdir should be empty.
+                    // $upload_file['file'] contains the absolute path like '/var/www/.../uploads/my-image.jpg'
+                    // We need 'my-image.jpg' for metadata.
+                    $upload_dir_info = wp_upload_dir(); // Get current upload configuration
+                    $relative_file_path_for_metadata = ltrim( str_replace( $upload_dir_info['basedir'], '', $upload_file['file'] ), '/' );
+
+                    $attachment_array = array(
+                        'guid'           => $upload_file['url'], // Full URL to the original file
+                        'post_mime_type' => 'image/'.$suffix,
+                        'post_title'     => basename($upload_file['file']), // Title from filename
+                        'post_content'   => '',
+                        'post_status'    => 'inherit',
+                        'file'           => $relative_file_path_for_metadata, // THIS IS THE FIX: crucial for get_attached_file()
+                    );
+
+                    error_log('Attachment details for wp_insert_attachment: '. var_export($attachment_array, true));
+
+                    // Insert the attachment post into the database
+                    // Second argument to wp_insert_attachment is the absolute path to the file
+                    $attach_id = wp_insert_attachment($attachment_array, $upload_file['file']);
+
+                    if ($attach_id) {
+                        $result['attach_id'] = $attach_id;
+
+                        // Include necessary files for image processing
+                        require_once(ABSPATH . 'wp-admin/includes/image.php');
+                        require_once(ABSPATH . 'wp-admin/includes/file.php');
+                        require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+                        // Generate/update metadata (including 'sizes' array)
+                        wp_update_attachment_metadata($attach_id, wp_generate_attachment_metadata($attach_id, $upload_file['file']));
+
+                        // --- Debug Path Checks (as provided by you) ---
+                        $main_image_path = get_attached_file($attach_id);
+                        error_log('--- Path Checks for ID ' . $attach_id . ' ---');
+                        error_log('Main Image Server Path (from get_attached_file): ' . $main_image_path);
+                        error_log('Main Image file_exists(): ' . (file_exists($main_image_path) ? 'Yes' : 'No'));
+                        error_log('Main Image is_readable(): ' . (is_readable($main_image_path) ? 'Yes' : 'No'));
+
+                        $metadata = wp_get_attachment_metadata($attach_id);
+                        if (isset($metadata['sizes']['thumbnail']['file'])) {
+                            $thumbnail_relative_filename = $metadata['sizes']['thumbnail']['file'];
+                            // Construct full server path to thumbnail
+                            $thumbnail_server_path = dirname($main_image_path) . '/' . $thumbnail_relative_filename;
+
+                            error_log('Thumbnail Server Path: ' . $thumbnail_server_path);
+                            error_log('Thumbnail file_exists(): ' . (file_exists($thumbnail_server_path) ? 'Yes' : 'No'));
+                            error_log('Thumbnail is_readable(): ' . (is_readable($thumbnail_server_path) ? 'Yes' : 'No'));
+                        } else {
+                            error_log('Thumbnail size not found in metadata (should not happen if generation succeeded).');
+                        }
+                        error_log('--- End Path Checks ---');
+                        // --- End Debug Path Checks ---
+
+                        // Set Alt Text (using the post title as fallback)
+                        $alt_text_to_set = get_the_title($attach_id);
+                        $alt_text_to_set = sanitize_text_field($alt_text_to_set);
+                        if (empty($alt_text_to_set)) {
+                            $alt_text_to_set = 'Image: ' . basename($upload_file['file']);
+                        }
+                        update_post_meta($attach_id, '_wp_attachment_image_alt', $alt_text_to_set);
+                        error_log(sprintf("Set alt text for attachment %d: \"%s\"", $attach_id, esc_html($alt_text_to_set)));
+
+                        // Get the final URL of the newly created attachment
+                        $new_src = wp_get_attachment_url($attach_id);
+                        $result['src'] = $new_src;
+                        error_log("Image transformed and uploaded: " . esc_html($src) . " to: " . esc_html($new_src));
+                        
+                        // Set media category (your custom function)
+                        if ( $content_type === 'team' ){
+                            set_media_category($attach_id, 'Team images', $report);
+                        } else {
+                            set_media_category($attach_id, 'Post images', $report);
+                        }
+
+                    } else {
+                        error_log("Error inserting attachment: " . esc_html($src) . " - wp_insert_attachment failed.");
+                    }
+
                 }
+                // Clean up the temporary resized file
+                unlink($resized_file);
+            } else {
+                error_log("Error resizing image: " . esc_html($src));
             }
         }
     }
+    error_log('transform_and_upload_image $result'.var_export($result, true));
     return $result;
 }
-function transform_image($img, &$report, &$processed_images){
+function transform_image($img, &$report, &$processed_images, $content_type, $site_url){
+    //error_log('transform_image $content_type '.$content_type. ' site_url: '.$site_url);
     $src = $img->getAttribute('src');
     $alt = $img->getAttribute('alt');
 
@@ -378,7 +329,7 @@ function transform_image($img, &$report, &$processed_images){
     }
 
     // Download image
-    $upload = transform_and_upload_image($src, $report);
+    $upload = transform_and_upload_image($src, $report, $content_type, $site_url);
     if ( !isset($upload['attach_id'])){
         report_li($report, sprintf("Error uploading image %s", $src));
         //var_dump($upload);
@@ -391,15 +342,6 @@ function transform_image($img, &$report, &$processed_images){
     $processed_images[] = $src; // Add to processed images
 
 }
-/*
-function act_load_pages_posts_transform_images($dom, &$report, &$processed_images) {
-    $imgs = $dom->getElementsByTagName('img');
-    foreach ($imgs as $img) {
-        transform_image($img, &$report, &$processed_images);
-    }
-    return $dom;
-}
-*/
 function get_remote_media_item( $id, $base_url ) {
     $url = trailingslashit( $base_url ) . 'wp-json/wp/v2/media/' . $id;
     $response = wp_remote_get( $url );
@@ -550,7 +492,8 @@ function act_load_pages_posts_fetch_single_wp_rest($credentials, $post_id, $post
 function act_load_pages_posts_fetch_single_wp_rest_by_slug($credentials, $slug, $post_type = 'post') {
     $base_url = $credentials['site_url'];
     $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $post_type . 's/?slug=' . $slug. '&context=edit';
-    $args = formrestheaders();
+    error_log('$endpoint: '.$endpoint);
+    $args = formrestheaders($credentials);
     $response = wp_remote_get($endpoint, $args);
 
     if (is_wp_error($response)) {
@@ -561,19 +504,16 @@ function act_load_pages_posts_fetch_single_wp_rest_by_slug($credentials, $slug, 
     $data = json_decode($body, true);
 
     if (empty($data)) {
-        return 'Error: Empty or invalid response.';
+        error_log ( 'Error: Empty or invalid response.');
+        return array();
     }
 
     if (isset($data['code'])) {
-        return 'API Error: ' . $data['message']; // Handle WordPress REST API errors
+        error_log('API Error: ' . $data['message']); // Handle WordPress REST API errors
+        return array();
     }
-//    error_log('Data received: ' . print_r($data, true));
-//    return array(
-//        'title' => $data[0]['title']['rendered'],
-//        'content' => $data[0]['content']['rendered'],
-//        'meta' => $data[0]['meta'], //example of how to pull meta data
-//    );
-    return $data;
+    error_log('Data received: ' . print_r($data, true));
+    return array($data);
 }
 function act_load_pages_posts_generate_report($report) {
     //Logic for generating a report.
@@ -786,12 +726,6 @@ function transform_link($link,&$report){
                         logit(sprintf('slug: %s', $slug));
                         $path = '/index.php/' . $slug;
                     }
-                //} else if ( strpos($domain, 'ww.') !== false ){
-                //    $path = 'WW/'.$path;
-                //} else if ( strpos($domain, 'cc.') !== false){
-                //    $path = 'CC/'.$path;
-                //} else if ( strpos($path,'/oldsite/index.php') !== false){
-                //    $path = str_replace('/oldsite/index.php/', '/index.php/', $path);
                 } else if ( strpos( $path, '/wp-content/uploads/') !== false){
                     $path = moveupload($href, $report);
                 } else {
@@ -835,14 +769,6 @@ function transform_link($link,&$report){
     }
 
 }
-/*
-function act_load_pages_posts_transform_links($dom, &$report) {
-    $links = $dom->getElementsByTagName('a');
-    foreach ($links as $link) {
-        transform_link($link, &$report);
-    }
-}
-*/
 function act_load_pages_posts_transform_links($content, &$report) {
     libxml_use_internal_errors(true); // suppress DOM warnings
 
@@ -864,10 +790,11 @@ function act_load_pages_posts_transform_links($content, &$report) {
     return $content;
 }
 
-function act_load_pages_posts_transform_images($content, &$report, &$processed_images) {
+function act_load_pages_posts_transform_images($content, &$report, &$processed_images, $content_type, $site_url) {
     libxml_use_internal_errors(true); // suppress DOM warnings
 
-    $content = preg_replace_callback('/<img[^>]*>/i', function ($matches) use (&$report, &$processed_images) {
+    // NOTE that arguments must be passed through the following function, otherwise they will not be visible within.
+    $content = preg_replace_callback('/<img[^>]*>/i', function ($matches) use (&$report, &$processed_images, $content_type, $site_url) {
         $img_html = $matches[0];
 
         $doc = new DOMDocument();
@@ -875,7 +802,7 @@ function act_load_pages_posts_transform_images($content, &$report, &$processed_i
         $img = $doc->getElementsByTagName('img')->item(0);
 
         if ($img) {
-            transform_image($img, $report, $processed_images);
+            transform_image($img, $report, $processed_images, $content_type, $site_url);
             return $doc->saveHTML($img); // return modified <img>
         }
 
@@ -963,7 +890,6 @@ function process_comments($old_post_id, $credentials, &$report) { // Renamed par
             'comment_author'       => $old_comment_arr['author_name'],
             'comment_author_email' => isset($old_comment_arr['author_email']) ? $old_comment_arr['author_email'] : '',
             'comment_author_url'   => $old_comment_arr['author_url'],
-//            'comment_content'      => $old_comment_arr['content']['rendered'],
             'comment_content' => $old_comment_arr['content']['raw'] ?? $old_comment_arr['content']['rendered'],
             'comment_type'         => $old_comment_arr['type'],
             'user_id'              => (int)$old_comment_arr['author'],
@@ -1039,7 +965,7 @@ function delete_post_comments($post_id, &$report) {
         return true;
     }
 }
-function act_load_pages_posts_process_content($content, $credentials, &$report, $source, &$processed_images) {
+function act_load_pages_posts_process_content($content, $credentials, &$report, $source, &$processed_images, $content_type) {
     $base_url = $credentials['site_url'];
     // Grab bits needed at end for reassembly
     $title = $content['title']['rendered'];
@@ -1047,6 +973,7 @@ function act_load_pages_posts_process_content($content, $credentials, &$report, 
     $type = $content['type'];
     $slug = $content['slug'];
     error_log('Processing content with slug: ' . $slug.' =========================================================');
+
     $featured_media = $content['featured_media'];
     if ( isset($content['categories'])){
         $categories = $content['categories'];
@@ -1075,7 +1002,7 @@ function act_load_pages_posts_process_content($content, $credentials, &$report, 
     //@$dom->loadHTML(mb_convert_encoding($content['content']['raw'],  'HTML-ENTITIES', 'UTF-8'));
     $content_raw = $content['content']['raw'];
     //error_log('Initial content_raw: '. $content_raw);
-    $content_raw = act_load_pages_posts_transform_images($content_raw, $report, $processed_images);
+    $content_raw = act_load_pages_posts_transform_images($content_raw, $report, $processed_images, $content_type, $credentials['site_url']);
     //error_log('after images content_raw: '. $content_raw);
     $content_raw = act_load_pages_posts_transform_links($content_raw, $report);
     //error_log('after links content_raw: '. $content_raw);
@@ -1087,7 +1014,7 @@ function act_load_pages_posts_process_content($content, $credentials, &$report, 
             $media_url = $media['guid']['rendered'];
             error_log(sprintf("Media URL %s", $media_url));
             // $featured_media = new image id     
-            $featured_media = transform_and_upload_image($media_url, $report);
+            $featured_media = transform_and_upload_image($media_url, $report, $content_type,  $credentials['site_url']);
             error_log(sprintf("Transformed media %s", var_export($featured_media, true)));
             //report_li( $report, var_export($media, true));
             if ( isset($media['caption']) && !empty($media['caption'])){
@@ -1165,10 +1092,15 @@ function act_load_pages_posts_process() {
     $to_date = null;
     $fromDateString = null;
     $toDateString = null;
+    error_log('============================================================= starting run =======================================================');
+    error_log('$content_type: '.$content_type);
+    error_log('$source:       '.$source);
+    error_log('slug:          '.$slug);
     if ( $content_type !== 'team'){
         if ( isset($_POST['from_date'])) {
             $fromDateString = filter_input(INPUT_POST, 'from_date', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
             try {
+                error_log('from_date:     '.$fromDateString);
                 $from_date = new DateTime($fromDateString);
                 logit(sprintf("From_date: ", $fromDateString));
             } catch (Exception $e) {
@@ -1180,6 +1112,7 @@ function act_load_pages_posts_process() {
         if ( isset($_POST['to_date'])) {
             $toDateString = filter_input(INPUT_POST, 'to_date', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
             try {
+                error_log('to_date:     '.$toDateString);
                 $to_date = new DateTime($toDateString);
                 logit(sprintf("to_date: ", $toDateString));
             } catch (Exception $e) {
@@ -1205,8 +1138,23 @@ function act_load_pages_posts_process() {
         'username' => 'apimigrator',
         'password' => 'nf1J pd8d HBHE nymU 0Z3f Nn6Z',
     ];
+    $cc_credentials = [
+        'site_url' => 'https://cc.actionclimateteignbridge.org',
+        'username' => 'apimigrator',
+        'password' => 'qpYm Nv6S 3Ti0 xXQO UBDO xB61',
+    ];
 
-    $credentials = ($source === 'ACT') ? $act_credentials : $ww_credentials;
+//    $credentials = ($source === 'ACT') ? $act_credentials : $ww_credentials;
+    if ( $source === 'ACT'){
+        $credentials = $act_credentials;
+    } else if ( $source === 'WW'){
+        $credentials = $ww_credentials;
+    } else if ( $source === 'CC'){
+        $credentials = $cc_credentials;
+    } else {
+        $credentials = null;
+    }
+    error_log('site_url:     '.$credentials['site_url']);
     init_category_conversion( $credentials['site_url'] );
 
     $processed_content = array(); // Array to store processed content
@@ -1238,7 +1186,7 @@ function act_load_pages_posts_process() {
     error_log('total_items: '. $total_items);
     foreach ($all_content as $content) {
         logit(sprintf('Processing %s %d of %d...', $content_type, ++$processed_count, $total_items));
-        $processed_content[] = act_load_pages_posts_process_content($content, $credentials, $report, $source, $processed_images);
+        $processed_content[] = act_load_pages_posts_process_content($content, $credentials, $report, $source, $processed_images, $content_type);
     }
     error_log(' ========================================================== insertion phase =========================================================');
     // Insert posts/pages (if enabled)

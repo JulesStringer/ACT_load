@@ -190,7 +190,11 @@ function get_new_category_ids_from_old( $old_category_ids, $source ) {
         $ww_category = get_term_by('slug', 'wildlife-wardens', 'category');
         $new_category_ids[] = $ww_category->term_id;
         return $new_category_ids;
-    } 
+    } else if ( $source === 'CC'){
+        $cc_category = get_term_by('slug', 'carbon-cutters', 'category');
+        $new_category_ids[] = $cc_category->term_id;
+        return $new_category_ids;
+    }
     if ( ! is_array( $old_category_ids ) || empty( $old_category_ids ) ) {
         return array();
     }
