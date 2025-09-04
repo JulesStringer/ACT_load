@@ -1,0 +1,59 @@
+<div class="wrap">
+    <h1>Check Pages and Posts</h2>
+    <table>
+        <tr>
+            <th scope="row"><label for="post_type">Post Type:</label></th>
+            <td>
+                <select name="post_type" id="post_type">
+                    <option value="posts" selected>Post</option>
+                    <option value="team">Team</option>
+                    <option value="event">Event</option>
+                    <option value="pages">Page</option>
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <th scope="row"><label for="method">Method:</label></th>
+            <td>
+                <select id="method" name="method" >
+                    <option value="all" selected>All</option>
+                    <option value="slug">URL/slug</option>
+                </select>
+            </td>
+        </tr>
+        <tr class="DATE_ENTRY">
+            <th>Dates:</th>
+            <td>From:<input type="date" id="from_date" name="from_date"/></td>
+            <td>To:<input type="date" id="to_date" name="to_date"/></td>
+        </tr>
+        <tr class="URL_entry">
+            <th>URL:</td>
+            <td>
+                <input name="url" id="url" width="300"/>
+            </td>
+        </tr>
+        <tr class="URL_entry">
+            <th>Slug</td>
+            <td>
+                <input name="slug" id="slug" width="150"/>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <button type="button" id="go" >Go</button>
+            </td>
+            <td>
+                <table>
+                    <tr><td>ID</td><td id="post_ID"></td></tr>
+                    <tr><td>Slug</td><td id="post_name"></td></tr>
+                    <tr><td>Date</td><td id="post_date"></td></tr>
+                    <tr><td id="current"></td><td id="count"></td></tr>
+                    <tr><td>Need update:</td><td id="toupdate" ></td></tr>
+                    <tr><td>Prompts</td><td id="prompts"></td></tr>
+                    <tr><td>Actions</td><td id="actions"></td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+    <div id="results" style="width:100%;height:500px;overflow-y:auto;"></div>
+</div>

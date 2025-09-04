@@ -13,6 +13,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/categories.php';
 require_once plugin_dir_path(__FILE__) . 'includes/jci-handlers.php'; // JCI functions
 require_once plugin_dir_path(__FILE__) . 'includes/json-upload-callback.php';   // Admin page HTML and form
 require_once plugin_dir_path(__FILE__) . 'includes/act-load-pages-posts.php';
+require_once plugin_dir_path(__FILE__) . 'includes/process-image.php';
 // ... any other includes
 
 // Enqueue scripts (add this to your plugin file)
@@ -21,6 +22,16 @@ add_action('admin_enqueue_scripts', 'act_load_enqueue_scripts');
 function act_load_enqueue_scripts( $hook_suffix ) {
     wp_enqueue_script('act-load-script', plugins_url('js/act-load.js', __FILE__), array('jquery'), '1.0', true);
     wp_localize_script('act-load-script', 'act_load_params', array('ajaxurl' => admin_url('admin-ajax.php')));
+    //error_log('hook_suffix '.$hook_suffix);
+    if ( $hook_suffix === 'act-load_page_act-load-check-pages-posts' ){
+        wp_enqueue_script('check-pages-posts', plugins_url('js/check-pages-posts.js', __FILE__), array('jquery'), '1.0', true);
+        $localized_data = array(
+            'rest_url'           => get_rest_url() . 'wp/v2/',
+            'home_url'           => home_url(), // Useful for relative URLs or site root
+            'nonce'              => wp_create_nonce( 'wp_rest' )
+        );
+        wp_localize_script('check-pages-posts','check_pages_data', $localized_data);
+    }
     if ($hook_suffix === 'act-load_page_act-load-pages-posts') {
         wp_enqueue_script(
             'act-load-pages-posts-script', // Unique handle for this script
@@ -47,6 +58,7 @@ function act_load_menu() {
     add_menu_page( 'ACT Load', 'ACT Load', 'read', 'act-load', 'act_load_page', 'dashicons-list-view' ); // Top-level menu
     add_submenu_page('act-load', 'Single JSON page/post', 'Single JSON page/post', 'edit_posts', 'act-load-single-json','act_load_single_json_page');
     add_submenu_page('act-load', 'Load Posts and Pages', 'Load Posts and Pages', 'edit_posts', 'act-load-pages-posts',  'act_load_pages_posts');
+    add_submenu_page('act-load', 'Check Posts and Pages', 'Check Posts and Pages', 'edit_posts', 'act-load-check-pages-posts','act_load_check_pages_posts');
 }
 function act_load_page() {
     // Top-level page content (can be empty or a welcome message)
@@ -56,11 +68,15 @@ function act_load_page() {
     echo '<ul>';
         echo '<li><a href="' . admin_url( 'admin.php?page=act-load-single-json') .'">Load single JSON page</a></li>';
         echo '<li><a href="' . admin_url( 'admin.php?page=act-load-pages-posts') .'">Load Pages and Posts</a></li>';
+        echo '<li><a href="' . admin_url( 'admin.php?page=act-load-check-pages-posts').'">Check Posts and Pages</a></li>';
     echo '</ul>';
 }
 
 function act_load_single_json_page() { // Callback for the single JSON page
     include plugin_dir_path(__FILE__) . 'html/single-json-page.html'; 
+}
+function act_load_check_pages_posts() {
+    include plugin_dir_path(__FILE__). 'html/check-pages-posts.html';
 }
 function act_load_pages_posts() {
     // Callback for the Load Pages and Posts page
