@@ -206,7 +206,7 @@ jQuery(document).ready(function($) {
                     t += '<tr><td>' + a + '</td><td>' + actions[a] + '</td></tr>';
                 }
                 t += '</table>';
-
+                element.action = action;
                 $('#actions').html(t);
             }
         }
@@ -237,7 +237,7 @@ jQuery(document).ready(function($) {
                     } else if ( element.prompt ){
                         body += '<tr><td>' + element.type + '</td>'
                             + '<td><a href="' + element.link +    '" target="_blank">' + element.link    + '</td>'
-                            + '<td>Needs manual update</td></tr>';
+                            + '<td>' + element.action + ' needs manual update</td></tr>';
                     }
 
                 }
@@ -249,7 +249,7 @@ jQuery(document).ready(function($) {
             updates: function(){
                 let count = 0;
                 for(let element of result.elements){
-                    if ( element.newlink ){
+                    if ( element.newlink || element.prompt){
                         count++;
                     }
                 }

@@ -3,7 +3,9 @@
 This plugin loads pages and posts from the following sources:
 + Load Single JSON Page - JSON files downloaded from the WP REST API into subdirectories of newsite
 + Load Pages and Posts - Wordpress pages and posts from a legacy site
-
++ Check Pages and Posts - Checks references from content on new site,
+  this runs much quicker and more interactively that Load pages and posts.
+  
 This plugin has been written to work with the actionclimateteignbridge.org website, but may be useful elsewhere.
 
 ## Load Single JSON Page
@@ -25,6 +27,37 @@ Loads posts, pages, team members from various sites to the current site. The fol
 + Comments are copied
 + Featured media is set
 + Any post excerpt is set
+
+## Check Posts and Pages
+Produces a quick report on references src= and href= in the content of posts and pages.
++ Ignores https://actionclimateteignbridge.org/lookup_document.php
++ Ignores any link containing plugins/ACT_maps as this is a generated iframe within the plugin which manifest at runtime only
++ Detects any references with the complete home url embedded and removes this in an revised version of the link,
++ Detects any other reference containing actionclimateteignbridge.org and suggests a correction initially manual,
+  classifies these by other, newsite, oldsite, mailto, ww, cc, oldsite.
+
+The meaning and action on these classifications is in the following table:
+|action|condition detected|suggested action|
+|------|------------------|----------------|
+|other |anything not described below|break these down further|
+|newsite|link starts https://actionclimateteignbridge.org/newsite|seems to be mainly tools which could be re-referenced|
+|oldsite|link starts https://actionclimateteignbridge.org/oldsite||
+|mailto|link starts mail|mailto: or mail%20to:|mailto: some act email address should be possible to replace with contact form pre-populated with correct destination|
+|ww|link starts with https://ww.actionclimateteignbridge.org/|Mix of pictures and links|
+|cc|link starts with https://cc.actionclimateteignbridge.org/|Mix of pictures and links|
+
+This has been run on posts and pages on https://test.actionclimateteignbridge.org with the following frequencies
+|item|posts|pages|
+|----|-----|-----|
+|full url||9|
+|other|64|14|
+|newsite|29|29|
+|oldsite|9|9|
+|mailto|121|14|
+|ww||89|
+|cc|||
+
+  
 
 ### Load Pages and Posts - input form
 The admin form has the following inputs:
