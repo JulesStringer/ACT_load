@@ -26,7 +26,7 @@ function act_load_enqueue_scripts( $hook_suffix ) {
     wp_enqueue_script('act-load-site-lookups', plugins_url('js/site_lookups.js',__FILE__), array(), '1.0', true);
     //error_log('hook_suffix '.$hook_suffix);
     if ( $hook_suffix === 'act-load_page_act-load-check-pages-posts' ){
-        wp_enqueue_script('check-pages-posts', plugins_url('js/check-pages-posts.js', __FILE__), array('jquery','act-load-site-lookups'), '1.0', true);
+        wp_enqueue_script('check-pages-posts', plugins_url('js/check-pages-posts.js', __FILE__), array('jquery','act-load-site-lookups'), '1.1', true);
         $localized_data = array(
             'rest_url'           => get_rest_url() . 'wp/v2/',
             'home_url'           => home_url(), // Useful for relative URLs or site root
