@@ -34,7 +34,14 @@ Produces a quick report on references src= and href= in the content of posts and
 + Ignores any link containing plugins/ACT_maps as this is a generated iframe within the plugin which manifest at runtime only
 + Detects any references with the complete home url embedded and removes this in an revised version of the link,
 + Detects any other reference containing actionclimateteignbridge.org and suggests a correction initially manual,
-  classifies these by other, newsite, oldsite, mailto, ww, cc, oldsite.
+  classifies these by mailto, newsite, pdfs, docx, images, maps, other.
++ For mailto a suitable contact-us link is suggested.
++ For newsite a table of page lookups is being constructed, links are suggested from this.
+* For pdfs these are assumed to be versioned documents, so a link via lookup_document.php is suggested.
++ For docx export to pdf is suggested then lookup_document.php.
++ For images moving to the the new site is suggested followed by linking to the new address
++ For maps these need to be added to the list for ACT_maps
++ Others are either links we can leave, or still need consideration (the number of these is dropping slowly).
 
 The meaning and action on these classifications is in the following table:
 |action|condition detected|suggested action|

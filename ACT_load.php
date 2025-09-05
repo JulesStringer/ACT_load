@@ -14,6 +14,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/jci-handlers.php'; // JCI fun
 require_once plugin_dir_path(__FILE__) . 'includes/json-upload-callback.php';   // Admin page HTML and form
 require_once plugin_dir_path(__FILE__) . 'includes/act-load-pages-posts.php';
 require_once plugin_dir_path(__FILE__) . 'includes/process-image.php';
+require_once plugin_dir_path(__FILE__) . 'includes/load-recipients.php';
 // ... any other includes
 
 // Enqueue scripts (add this to your plugin file)
@@ -22,13 +23,15 @@ add_action('admin_enqueue_scripts', 'act_load_enqueue_scripts');
 function act_load_enqueue_scripts( $hook_suffix ) {
     wp_enqueue_script('act-load-script', plugins_url('js/act-load.js', __FILE__), array('jquery'), '1.0', true);
     wp_localize_script('act-load-script', 'act_load_params', array('ajaxurl' => admin_url('admin-ajax.php')));
+    wp_enqueue_script('act-load-site-lookups', plugins_url('js/site_lookups.js',__FILE__), array(), '1.0', true);
     //error_log('hook_suffix '.$hook_suffix);
     if ( $hook_suffix === 'act-load_page_act-load-check-pages-posts' ){
-        wp_enqueue_script('check-pages-posts', plugins_url('js/check-pages-posts.js', __FILE__), array('jquery'), '1.0', true);
+        wp_enqueue_script('check-pages-posts', plugins_url('js/check-pages-posts.js', __FILE__), array('jquery','act-load-site-lookups'), '1.0', true);
         $localized_data = array(
             'rest_url'           => get_rest_url() . 'wp/v2/',
             'home_url'           => home_url(), // Useful for relative URLs or site root
-            'nonce'              => wp_create_nonce( 'wp_rest' )
+            'nonce'              => wp_create_nonce( 'wp_rest' ),
+            'recipients_csv'     => load_recipients()
         );
         wp_localize_script('check-pages-posts','check_pages_data', $localized_data);
     }

@@ -4,11 +4,88 @@ jQuery(document).ready(function($) {
     let rest_url = check_pages_data.rest_url;
     let home_url = check_pages_data.home_url;
     let nonce    = check_pages_data.nonce;
+    let recipients_csv = check_pages_data.recipients_csv;
     console.log('rest_url: ' + rest_url);
     console.log('home_url: ' + home_url);
     console.log('nonce: ' + nonce);
+    console.log('recipients_csv: ' + recipients_csv);
+    function parse_recipients_csv(csvdata) {  // Function name lowercase
+        const lines = csvdata.split('\n'); // Variable name lowercase
+        const headers = lines[0].split(',');
+        const data = [];
+        for (let i = 1; i < lines.length; i++) {
+            let line = lines[i];
+            const values = [];
+            let field = '';
+            for(j=0; j < line.length; j++){
+                if ( line[j] === '"' && field.length == 0){
+                    j++;
+                    while(line[j] !== '"' && j < line.length){
+                        field += line[j];
+                        j++;
+                    }
+                } else if ( line[j] === ',' ){
+                    values.push(field);
+                    field = '';
+                } else if ( line[j] >= ' ' ){
+                    field += line[j];
+                }
+            }
+            if ( field.length > 0){
+                values.push(field);
+            }
+            if ( values.length > 0){
+                let ok = false;
+                for(let value of values){
+                    if ( value.length > 0){
+                        ok = true;
+                    }
+                }
+                if ( ok ){
+                    const row = {
+                        name: values[0],
+                        email: values[1]
+                    };
+                    data.push(row);
+                }
+            }
+        }
+        return data;
+    }
+    let recipients = parse_recipients_csv(recipients_csv);
+    console.log(JSON.stringify(recipients));
+    function lookup_email(name){
+        let result = null;
+        if ( name === 'paulwynter')result = 'Act with the Arts';
+        if ( name === 'peta')result = 'Carbon Cutters';
+        if ( name === 'flavio')result = 'Wildlife Warden Scheme';
+        if ( name === 'fuad')result = 'Built Environment and Energy';
+        if ( name === 'scott') result = 'Carbon Cutters';
+        if ( name === 'technical') result = 'Website';
+        if ( name === 'rob') result = 'Carbon Cutters';
+        if ( name === 'paulbloch' ) result = 'Carbon Cutters';
+        if ( result === null){
+            for(const recipient of recipients){
+                let parts = recipient.email.split(';');
+                for( const part of parts){
+                    if ( name === part.split('@')[0] ){
+                        result = recipient.name;
+                        break;
+                    }
+                }
+            }
+        }
+        return result;
+    }
     let prompts = 0;
     let actions = {};
+    let emails = {};
+    let newsite = {};
+    let pdfs = {};
+    let docs = {};
+    let images = {};
+    let maps = {};
+    let other = {};
     $('#method').val('all');
     on_method();
     function on_method(){
@@ -96,9 +173,14 @@ jQuery(document).ready(function($) {
         return params;
     }
     async function getpost_by_id(post_type, id){
-        let url = rest_url + post_type + '?include=' + id;
+        let url = rest_url + post_type + '?include=' + id + '&context=edit';
         //console.log('url: ' + url);
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-WP-Nonce': nonce
+            }
+        });
         if (!response.ok) {
             throw new Error('Network response was not ok');
         }
@@ -132,18 +214,35 @@ jQuery(document).ready(function($) {
                 // get single post and update UI
                 let post = await getpost_by_id(params.post_type, posti.id);
                 if ( post.content ){
-                    if ( post.content.rendered ){
-                        let res = process_content(post.content.rendered, posti , params.post_type );
+                    if ( post.content.raw ){
+                        let res = process_content(post.content.raw, posti , params.post_type );
                         if ( res.updates() > 0){
-                            let html = res.report();
-                            $('#results').append(html);
+                            body = '<div id="post_report_' + posti.id + '">';
+                            body += '<h1>' + posti.slug + '</h1>';
+                            body += '<a href="/' + posti.slug + '" target="_blank" >' + posti.slug + '</a>';
+                            body += '<table>';
+                            body += '<tr><th>ID:</td><td>' + posti.id + '</td></tr>';
+                            body += '<tr><td>Post type:</td><td>' + params.post_type + '</td></tr>';
+                            body += '<tr><th>date</td><td>' + posti.date + '</td></tr>';
+                            body += '<tr><th>slug</td><td>' + posti.slug + '</td></tr>';
+                            body += '</table>';
+                            body += res.report();
+                            body += '<button type="button" class="update-button" data-post-id="' + posti.id + '">Update</button>';
+
+                            // update the links and show the result
+                            post.content.raw = res.get_updated_content();
+                            let res2 = process_content(post.content.raw, posti, params.post_type);
+                            body += '<h2>After update</h2>';
+                            body += res2.report();
+                            body += '</div>';
+                            $('#results').append(body);
+                            //$('#post_report_' + posti.id).append(updated_html);
+                            posts_to_update[posti.id] = post;
                             toupdate++;
                             $('#toupdate').text(toupdate);
-                            post.content.rendered = res.get_updated_content();
-                            posts_to_update[posti.id] = post;
                         }
                     } else {
-                        console.log('No post.content.rendered post.content has ' + Object.keys(post.content));
+                        console.log('No post.content.raw post.content has ' + Object.keys(post.content));
                     }
                 }
             }
@@ -152,6 +251,33 @@ jQuery(document).ready(function($) {
         }
     }
     $('#go').on('click', on_go_check);
+    function accumulate(action_object, prefix, element, id){
+        let link = element.link;
+        let key = link.replace(prefix,'');
+        console.log(id + ' : prefix: ' + prefix + ' link: ' + link + ' key: ' + key);
+        if ( !action_object[key] ){
+            action_object[key] = {
+                count:0,
+            }
+        }
+        action_object[key].count++;
+        if ( element.newlink ){
+            action_object[key].url = element.newlink;
+        }
+        if ( id ){
+            let t = '<table>';
+            t += '<tr><th>action</th><th>count</th><th>url</th></tr>';
+            for(const a in action_object){
+                t += '<tr><td>' + a + '</td><td>' + action_object[a].count + '</td><td>'
+                if ( action_object[a].url ){
+                    t += action_object[a].url;
+                }
+                t += '</td></tr>';
+            }
+            t += '</table>';
+            $('#' + id).html(t);
+        }
+    }
     function process_content(content, posti, post_type){
         //console.log(content);
         const tempdiv = document.createElement('div');
@@ -181,20 +307,91 @@ jQuery(document).ready(function($) {
         for(let element of elements){
             if ( element.link.startsWith('https://actionclimateteignbridge.org/lookup_document.php')){
                 // do nothing for lookup_document
-            } else if ( element.link.indexOf('plugins/ACT_maps') > 0 ){
+//            } else if ( element.link.indexOf('plugins/ACT_maps') > 0 ){
                 // do nothing maps as false reporting
             } else if ( element.link.startsWith(home_url)){
                 element.newlink = element.link.replace(home_url,'');
             } else if ( element.link.indexOf('actionclimateteignbridge.org') > 0){
-                element.prompt = true;
-                prompts++;
-                $('#prompts').text(prompts);
                 let action = 'other';
                 if ( element.link.startsWith('mail')) action = 'mailto';
-                if ( element.link.startsWith('https://ww.actionclimateteignbridge.org')) action = 'ww';
-                if ( element.link.startsWith('https://cc.actionclimateteignbridge.org')) action = 'cc';
-                if ( element.link.startsWith('https://actionclimateteignbridge.org/oldsite')) action = 'oldsite';
-                if ( element.link.startsWith('https://actionclimateteignbridge.org/newsite')) action = 'newsite';
+                if ( element.link.endsWith('@actionclimateteignbridge.org')) action = 'mailto';
+                if ( action === 'mailto'){
+                    // look for a suitable email
+                    let decoded_string = decodeURIComponent(element.link);
+                    decoded_string = decoded_string.replace('http://','');
+                    decoded_string = decoded_string.replace('https://','');
+                    if ( decoded_string.indexOf(':') >= 0){
+                        decoded_string = decoded_string.split(':')[1];
+                    }
+                    let email = decoded_string.split('@')[0].trim();
+                    //if ( email.indexOf('vicky') >= 0)element.newlink = '/contact-us/?recipients=Wildlife%20Warden%20Scheme';
+                    //if ( email.indexOf('fuad') >= 0)element.newlink = '/contact-us/?recipients=Energy%20and%20Built%20Environment';
+                    let target = lookup_email(email);
+                    if ( target ){
+                        element.newlink = '/contact-us/?recipients=' + encodeURIComponent(target);
+                    }
+                    let e = emails[email];
+                    if ( !e ){
+                        emails[email] = {
+                            count: 0,
+                            url: element.newlink
+                        };
+                    }
+                    emails[email].count++;
+                    let t = '<table>';
+                    t += '<tr><th>email</th><th>count</th><th>url</th></tr>';
+                    for(const e in emails){
+                        t += '<tr><td>' + e + '</td><td>' + emails[e].count + '</td><td>' + emails[e].url + '</td></tr>';
+                    }
+                    t += '</table>';
+                    $('#emails').html(t);
+                }
+                if ( element.link.startsWith('https://actionclimateteignbridge.org/newsite/page.php')) action = 'newsite';
+//                if ( element.link.startsWith('https://ww.actionclimateteignbridge.org')) action = 'ww';
+//                if ( element.link.startsWith('https://cc.actionclimateteignbridge.org')) action = 'cc';
+//                if ( element.link.startsWith('https://actionclimateteignbridge.org/oldsite')) action = 'oldsite';
+                let rawlink = element.link.split('#')[0]; 
+                let pagelink = element.link.split('#')[1];
+                if ( rawlink.endsWith('.pdf')){
+                    action = 'pdfs';
+                    const parts = element.link.split('/');
+                    const filename = parts[parts.length - 1];
+                    const extractedName = filename.split('-v')[0];
+                    element.newlink = 'https://actionclimateteignbridge.org/lookup_document.php/ACT/' + extractedName;
+                }
+                if ( rawlink.endsWith('.docx')){
+                    action = 'docs';
+                    const parts = element.link.split('/');
+                    const filename = parts[parts.length - 1];
+                    const extractedName = filename.split('-v')[0];
+                    element.newlink = 'https://actionclimateteignbridge.org/lookup_document.php/ACT/' + extractedName;
+                }
+                if ( rawlink.endsWith('.png') || rawlink.endsWith('jpg') || rawlink.endsWith('jpeg') || rawlink.endsWith('webp')){
+                    action = 'images';
+                    const parts = element.link.split('/');
+                    const filename = parts[parts.length - 1];
+                    element.newlink = '/wp-content/uploads/' + filename;
+                }
+                if ( action === 'newsite'){
+                    let key = element.link.replace('https://actionclimateteignbridge.org/newsite/page.php/','');
+                    element.newlink = newsite_lookup[key];
+                }
+                if ( element.link.indexOf('plugins/ACT_maps') > 0 ) action = 'ACT_maps';
+                if ( element.link.startsWith('https://actionclimateteignbridge.org/newsite/') && action != 'newsite'){
+                    let base = element.link.replace('https://actionclimateteignbridge.org/newsite/','');
+                    if ( base.indexOf('events.html') >= 0){
+                        element.newlink = '/activities/events/';
+                        action = 'events';
+                    }
+                    if ( base.indexOf('map.html') >= 0){
+                        action = 'map';
+                    }
+                }
+                if ( !element.newlink ){
+                    element.prompt = true;
+                    prompts++;
+                    $('#prompts').text(prompts);
+                }         
                 let act = actions[action];
                 if (!act){
                     actions[action] = 0;
@@ -208,6 +405,26 @@ jQuery(document).ready(function($) {
                 t += '</table>';
                 element.action = action;
                 $('#actions').html(t);
+                switch(action){
+                    case 'newsite':
+                        accumulate(newsite, 'https://actionclimateteignbridge.org/newsite/page.php/', element, 'newsites');
+                        break;
+                    case 'pdfs':
+                        accumulate(pdfs, '', element, 'pdfs');
+                        break;
+                    case 'docs':
+                        accumulate(docs, '', element, 'docs');
+                        break;
+                    case 'images':
+                        accumulate(images, '', element, 'images')
+                        break;
+                    case 'other':
+                        accumulate(other, '', element, 'others');
+                        break;
+                    case 'maps':
+                        accumulate(maps, 'https://actionclimateteignbridge.org/newsite/maps.html/', element, 'maps');
+                        break;
+                }
             }
         }
         let result = {
@@ -218,15 +435,6 @@ jQuery(document).ready(function($) {
             divid: post_type + '_content_' + posti.id,
             report: function(){
                 let body = '';
-                body = '<div>';
-                body += '<h1>' + result.index.slug + '</h1>';
-                body += '<a href="/' + result.index.slug + '" target="_blank" >' + result.index.slug + '</a>';
-                body += '<table>';
-                body += '<tr><th>ID:</td><td>' + result.index.id + '</td></tr>';
-                body += '<tr><td>Post type:</td><td>' + result.post_type + '</td></tr>';
-                body += '<tr><th>date</td><td>' + result.index.date + '</td></tr>';
-                body += '<tr><th>slug</td><td>' + result.index.slug + '</td></tr>';
-                body += '</table>';
                 body += '<table>';
                 body += '<tr><th>type</th><th>Found link</th><th>Suggested replacement</th></tr>';
                 for(let element of result.elements){
@@ -242,8 +450,6 @@ jQuery(document).ready(function($) {
 
                 }
                 body += '</table>';
-                body += '<button type="button" onclick="on_update(' + result.index.id + ');" >Update</button>';
-                body += '</div>';
                 return body;
             },
             updates: function(){
@@ -266,37 +472,52 @@ jQuery(document).ready(function($) {
         }
         return result;
     }
-});
-async function updatePost(postId, newContent){
-    try {
-        const response = await fetch(`${rest_url}${post_type}/${postId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                // Include the nonce in the X-WP-Nonce header
-                'X-WP-Nonce': nonce
-            },
-            body: JSON.stringify({
-                content: newContent
-            })
-        });
+    async function updatePost(postId, newContent){
+        try {
+            let post_type = $('#post_type').val();
+            const url = `${rest_url}${post_type}/${postId}`;
+            console.log('url: ' + url);
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Include the nonce in the X-WP-Nonce header
+                    'X-WP-Nonce': nonce
+                },
+                body: JSON.stringify({
+                    content: newContent
+                })
+            });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`HTTP error! Status: ${response.status}, Code: ${errorData.code}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`HTTP error! Status: ${response.status}, Code: ${errorData.code}`);
+            }
+
+            const updatedPost = await response.json();
+            console.log('Post updated successfully:', updatedPost);
+            return updatedPost;
+        } catch (error) {
+            console.error('Failed to update post:', error);
+            throw error;
         }
+    };
+    $('#results').on('click', '.update-button', async function() {
+        // 'this' refers to the button that was clicked.
+        const id = $(this).data('post-id'); // Get the ID from the data attribute.
+alert('Updating ' + id);
+        // Your 'on_update' logic, but now it has access to the scoped variables.
+        let post = posts_to_update[id];
+        if (post) {
+            try {
+                await updatePost(id, post.updatedContent); // Assuming updatePost expects ID and content
+                // Now re-read update post_report_id if needed
+                console.log(`Post ${id} updated successfully.`);
+            } catch (error) {
+                console.error(`Error updating post ${id}:`, error);
+            }
+        }
+    });
 
-        const updatedPost = await response.json();
-        console.log('Post updated successfully:', updatedPost);
-        return updatedPost;
-    } catch (error) {
-        console.error('Failed to update post:', error);
-        throw error;
-    }
-};
-async function on_update(id){
-    alert('Clicked update ' + id);
-    console.log('clicked update ' + id );
-    let post = posts_to_update[id];
-    console.log(JSON.stringify(post));
-}
+    // ... the rest of your report generation and append logic ...
+});
