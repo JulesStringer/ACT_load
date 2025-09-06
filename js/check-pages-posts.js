@@ -3,11 +3,14 @@ jQuery(document).ready(function($) {
     console.log('Initialising document');
     let rest_url = check_pages_data.rest_url;
     let home_url = check_pages_data.home_url;
+    let home_url_un = home_url.replace('https','http');
     let nonce    = check_pages_data.nonce;
     let recipients_csv = check_pages_data.recipients_csv;
     console.log('rest_url: ' + rest_url);
     console.log('home_url: ' + home_url);
+    console.log('home_url_un: ' + home_url_un);
     console.log('nonce: ' + nonce);
+    console.log('----------------------------------');
     console.log('recipients_csv: ' + recipients_csv);
     function parse_recipients_csv(csvdata) {  // Function name lowercase
         const lines = csvdata.split('\n'); // Variable name lowercase
@@ -59,7 +62,7 @@ jQuery(document).ready(function($) {
         if ( name === 'paulwynter')result = 'Act with the Arts';
         if ( name === 'peta')result = 'Carbon Cutters';
         if ( name === 'flavio')result = 'Wildlife Warden Scheme';
-        if ( name === 'fuad')result = 'Built Environment and Energy';
+        if ( name === 'fuad')result = 'Energy and Built Environment';
         if ( name === 'scott') result = 'Carbon Cutters';
         if ( name === 'technical') result = 'Website';
         if ( name === 'rob') result = 'Carbon Cutters';
@@ -173,8 +176,8 @@ jQuery(document).ready(function($) {
         return params;
     }
     async function getpost_by_id(post_type, id){
-        let url = rest_url + post_type + '?include=' + id + '&context=edit';
-        //console.log('url: ' + url);
+        let url = rest_url + post_type + '/' + id + '?context=edit';
+        console.log('url: ' + url);
         const response = await fetch(url, {
             method: 'GET',
             headers: {
@@ -186,7 +189,7 @@ jQuery(document).ready(function($) {
         }
         const posts = await response.json();
         //console.log('post count: ' + posts.length);
-        return posts[0];
+        return posts;
     }
     posts_to_update = {};
     async function on_go_check(){
@@ -194,6 +197,12 @@ jQuery(document).ready(function($) {
         let params = get_params();
         console.log(JSON.stringify(params));
         $('#results').html('');
+        $('#actions').html('');
+        $('#newsites').html('');
+        $('#pdfs').html();
+        $('#docs').html();
+        $('#images').html();
+        $('#others').html();
         // Request list of posts id, slug, date to process
         if ( params.method === 'all' ){
             let postindex = await params.build_index();
@@ -215,7 +224,7 @@ jQuery(document).ready(function($) {
                 let post = await getpost_by_id(params.post_type, posti.id);
                 if ( post.content ){
                     if ( post.content.raw ){
-                        let res = process_content(post.content.raw, posti , params.post_type );
+                        let res = process_content(post.content.raw , true );
                         if ( res.updates() > 0){
                             body = '<div id="post_report_' + posti.id + '">';
                             body += '<h1>' + posti.slug + '</h1>';
@@ -231,9 +240,13 @@ jQuery(document).ready(function($) {
 
                             // update the links and show the result
                             post.content.raw = res.get_updated_content();
-                            let res2 = process_content(post.content.raw, posti, params.post_type);
-                            body += '<h2>After update</h2>';
-                            body += res2.report();
+                            if ( post.content.raw ){
+                            //    body += '<h2>After update</h2>';
+                            //    let res2 = process_content(post.content.raw, false);
+                            //    body += res2.report();
+                            } else {
+                                console.log('updated content was null');
+                            }
                             body += '</div>';
                             $('#results').append(body);
                             //$('#post_report_' + posti.id).append(updated_html);
@@ -278,7 +291,7 @@ jQuery(document).ready(function($) {
             $('#' + id).html(t);
         }
     }
-    function process_content(content, posti, post_type){
+    function process_content(content, total){
         //console.log(content);
         const tempdiv = document.createElement('div');
         tempdiv.innerHTML = content;
@@ -307,10 +320,13 @@ jQuery(document).ready(function($) {
         for(let element of elements){
             if ( element.link.startsWith('https://actionclimateteignbridge.org/lookup_document.php')){
                 // do nothing for lookup_document
-//            } else if ( element.link.indexOf('plugins/ACT_maps') > 0 ){
-                // do nothing maps as false reporting
+            } else if ( element.link.startsWith('festival.')){
             } else if ( element.link.startsWith(home_url)){
                 element.newlink = element.link.replace(home_url,'');
+                element.auto = true;
+            } else if ( element.link.startsWith(home_url_un)){
+                element.newlink = element.link.replace(home_url_un,'');
+                element.auto = true;
             } else if ( element.link.indexOf('actionclimateteignbridge.org') > 0){
                 let action = 'other';
                 if ( element.link.startsWith('mail')) action = 'mailto';
@@ -329,6 +345,7 @@ jQuery(document).ready(function($) {
                     let target = lookup_email(email);
                     if ( target ){
                         element.newlink = '/contact-us/?recipients=' + encodeURIComponent(target);
+                        element.auto = true;
                     }
                     let e = emails[email];
                     if ( !e ){
@@ -347,9 +364,6 @@ jQuery(document).ready(function($) {
                     $('#emails').html(t);
                 }
                 if ( element.link.startsWith('https://actionclimateteignbridge.org/newsite/page.php')) action = 'newsite';
-//                if ( element.link.startsWith('https://ww.actionclimateteignbridge.org')) action = 'ww';
-//                if ( element.link.startsWith('https://cc.actionclimateteignbridge.org')) action = 'cc';
-//                if ( element.link.startsWith('https://actionclimateteignbridge.org/oldsite')) action = 'oldsite';
                 let rawlink = element.link.split('#')[0]; 
                 let pagelink = element.link.split('#')[1];
                 if ( rawlink.endsWith('.pdf')){
@@ -389,50 +403,54 @@ jQuery(document).ready(function($) {
                 }
                 if ( !element.newlink ){
                     element.prompt = true;
-                    prompts++;
-                    $('#prompts').text(prompts);
-                }         
-                let act = actions[action];
-                if (!act){
-                    actions[action] = 0;
                 }
-                actions[action]++;
-                let t = '<table>';
-                t += '<tr><th>action</th><th>count</th></tr>';
-                for(const a in actions){
-                    t += '<tr><td>' + a + '</td><td>' + actions[a] + '</td></tr>';
-                }
-                t += '</table>';
-                element.action = action;
-                $('#actions').html(t);
-                switch(action){
-                    case 'newsite':
-                        accumulate(newsite, 'https://actionclimateteignbridge.org/newsite/page.php/', element, 'newsites');
-                        break;
-                    case 'pdfs':
-                        accumulate(pdfs, '', element, 'pdfs');
-                        break;
-                    case 'docs':
-                        accumulate(docs, '', element, 'docs');
-                        break;
-                    case 'images':
-                        accumulate(images, '', element, 'images')
-                        break;
-                    case 'other':
-                        accumulate(other, '', element, 'others');
-                        break;
-                    case 'maps':
-                        accumulate(maps, 'https://actionclimateteignbridge.org/newsite/maps.html/', element, 'maps');
-                        break;
+                if ( total ){
+                    if ( element.prompt ) {
+                        prompts++;
+                        $('#prompts').text(prompts);
+                    } 
+                    let act = actions[action];
+                    if (!act){
+                        actions[action] = 0;
+                    }
+                    actions[action]++;
+                    let t = '<table>';
+                    t += '<tr><th>action</th><th>count</th></tr>';
+                    for(const a in actions){
+                        t += '<tr><td>' + a + '</td><td>' + actions[a] + '</td></tr>';
+                    }
+                    t += '</table>';
+                    element.action = action;
+                    $('#actions').html(t);
+                    switch(action){
+                        case 'newsite':
+                            accumulate(newsite, 'https://actionclimateteignbridge.org/newsite/page.php/', element, 'newsites');
+                            break;
+                        case 'pdfs':
+                            //accumulate(pdfs, '', element, 'pdfs');
+                            $('#pdfs').text('There are ' + actions['pdfs'] + ' of these');
+                            break;
+                        case 'docs':
+                            //accumulate(docs, '', element, 'docs');
+                            $('#docs').text('There are ' + actions['docs'] + ' of these');
+                            break;
+                        case 'images':
+                            $('#images').text('There are ' + actions['images'] + ' of these');
+                            //accumulate(images, '', element, 'images')
+                            break;
+                        case 'other':
+                            accumulate(other, '', element, 'others');
+                            break;
+                        case 'maps':
+                            //accumulate(maps, 'https://actionclimateteignbridge.org/newsite/maps.html/', element, 'maps');
+                            break;
+                    }
                 }
             }
         }
         let result = {
             tempdiv: tempdiv,
             elements: elements,
-            post_type: post_type,
-            index: posti,
-            divid: post_type + '_content_' + posti.id,
             report: function(){
                 let body = '';
                 body += '<table>';
@@ -440,8 +458,12 @@ jQuery(document).ready(function($) {
                 for(let element of result.elements){
                     if ( element.newlink ){
                         body += '<tr><td>' + element.type + '</td>'
-                            + '<td><a href="' + element.link +    '" target="_blank">' + element.link    + '</td>'
-                            + '<td><a href="' + element.newlink + '" target="_blank">' + element.newlink + '</td></tr>';
+                            + '<td><a href="' + element.link +    '" target="_blank">' + element.link    + '</td>';
+                        if ( element.auto ){
+                           body += '<td><a href="' + element.newlink + '" target="_blank">' + element.newlink + '</td></tr>';
+                        } else {
+                           body += '<td>' + element.newlink + '</td></tr>';
+                        }
                     } else if ( element.prompt ){
                         body += '<tr><td>' + element.type + '</td>'
                             + '<td><a href="' + element.link +    '" target="_blank">' + element.link    + '</td>'
@@ -463,7 +485,7 @@ jQuery(document).ready(function($) {
             },
             get_updated_content: function(){
                 for(let element of result.elements){
-                    if ( element.newlink ){
+                    if ( element.newlink && element.auto){
                         element.element.setAttribute(element.type, element.newlink);
                     }
                 }
@@ -505,14 +527,17 @@ jQuery(document).ready(function($) {
     $('#results').on('click', '.update-button', async function() {
         // 'this' refers to the button that was clicked.
         const id = $(this).data('post-id'); // Get the ID from the data attribute.
-alert('Updating ' + id);
+//alert('Updating ' + id);
         // Your 'on_update' logic, but now it has access to the scoped variables.
         let post = posts_to_update[id];
         if (post) {
             try {
-                await updatePost(id, post.updatedContent); // Assuming updatePost expects ID and content
+                let updated = await updatePost(id, post.content.raw); // Assuming updatePost expects ID and content
                 // Now re-read update post_report_id if needed
                 console.log(`Post ${id} updated successfully.`);
+                //console.log(JSON.stringify(updated));
+                //let res = process_content(updated.content.raw, false);
+                //console.log(res.report());
             } catch (error) {
                 console.error(`Error updating post ${id}:`, error);
             }
