@@ -23,7 +23,7 @@ add_action('admin_enqueue_scripts', 'act_load_enqueue_scripts');
 function act_load_enqueue_scripts( $hook_suffix ) {
     wp_enqueue_script('act-load-script', plugins_url('js/act-load.js', __FILE__), array('jquery'), '1.0', true);
     wp_localize_script('act-load-script', 'act_load_params', array('ajaxurl' => admin_url('admin-ajax.php')));
-    wp_enqueue_script('act-load-site-lookups', plugins_url('js/site_lookups.js',__FILE__), array(), '1.0', true);
+    wp_enqueue_script('act-load-site-lookups', plugins_url('js/site_lookups.js',__FILE__), array(), '1.1', true);
     //error_log('hook_suffix '.$hook_suffix);
     if ( $hook_suffix === 'act-load_page_act-load-check-pages-posts' ){
         wp_enqueue_script('check-pages-posts', plugins_url('js/check-pages-posts.js', __FILE__), array('jquery','act-load-site-lookups'), '1.2', true);
