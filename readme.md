@@ -43,29 +43,6 @@ Produces a quick report on references src= and href= in the content of posts and
 + For maps these need to be added to the list for ACT_maps
 + Others are either links we can leave, or still need consideration (the number of these is dropping slowly).
 
-The meaning and action on these classifications is in the following table:
-|action|condition detected|suggested action|
-|------|------------------|----------------|
-|other |anything not described below|break these down further|
-|newsite|link starts https://actionclimateteignbridge.org/newsite|seems to be mainly tools which could be re-referenced|
-|oldsite|link starts https://actionclimateteignbridge.org/oldsite||
-|mailto|link starts mail|mailto: or mail%20to:|mailto: some act email address should be possible to replace with contact form pre-populated with correct destination|
-|ww|link starts with https://ww.actionclimateteignbridge.org/|Mix of pictures and links|
-|cc|link starts with https://cc.actionclimateteignbridge.org/|Mix of pictures and links|
-
-This has been run on posts and pages on https://test.actionclimateteignbridge.org with the following frequencies
-|item|posts|pages|
-|----|-----|-----|
-|full url||9|
-|other|64|14|
-|newsite|29|29|
-|oldsite|9|9|
-|mailto|121|14|
-|ww||89|
-|cc|||
-
-  
-
 ### Load Pages and Posts - input form
 The admin form has the following inputs:
 + Source Site - remote site containing source posts can be:
