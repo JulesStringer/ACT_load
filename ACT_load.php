@@ -15,6 +15,8 @@ require_once plugin_dir_path(__FILE__) . 'includes/json-upload-callback.php';   
 require_once plugin_dir_path(__FILE__) . 'includes/act-load-pages-posts.php';
 require_once plugin_dir_path(__FILE__) . 'includes/process-image.php';
 require_once plugin_dir_path(__FILE__) . 'includes/load-recipients.php';
+require_once plugin_dir_path(__FILE__) . 'includes/movemedia.php';
+require_once plugin_dir_path(__FILE__) . 'includes/url_checker.php';
 // ... any other includes
 
 // Enqueue scripts (add this to your plugin file)
@@ -31,6 +33,10 @@ function act_load_enqueue_scripts( $hook_suffix ) {
             'rest_url'           => get_rest_url() . 'wp/v2/',
             'home_url'           => home_url(), // Useful for relative URLs or site root
             'nonce'              => wp_create_nonce( 'wp_rest' ),
+            'ajax_url'           => admin_url('admin-ajax.php'),
+            'move_media_nonce'   => wp_create_nonce( 'move_media_nonce'),
+            'move_image_nonce'   => wp_create_nonce( 'move_image_nonce'),
+            'url_check_nonce'    => wp_create_nonce( 'url_check_nonce'), 
             'recipients_csv'     => load_recipients()
         );
         wp_localize_script('check-pages-posts','check_pages_data', $localized_data);
@@ -45,7 +51,6 @@ function act_load_enqueue_scripts( $hook_suffix ) {
         );
     }
 }
-
 // AJAX Handler (just the action registration here)
 add_action('wp_ajax_act_load_upload', 'act_convert_upload_callback');
 

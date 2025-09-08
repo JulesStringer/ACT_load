@@ -163,7 +163,7 @@ function transform_and_upload_image($src, $content_type, $site_url){
     $a = explode('?', $src);
     $src = $a[0];
 
-    if ( !str_starts_with($src, $site_url)){
+    if ($site_url != null && !str_starts_with($src, $site_url)){
         error_log('Url not on source so not moving '.$src );
         $result = array();
         $result['attach_id'] = 0;
@@ -302,10 +302,10 @@ function transform_and_upload_image($src, $content_type, $site_url){
                         error_log("Image transformed and uploaded: " . esc_html($src) . " to: " . esc_html($new_src));
                         
                         // Set media category (your custom function)
-                        if ( $content_type === 'team' ){
-                            set_media_category($attach_id, 'Team images', $report);
+                        if ( $content_type != null && $content_type === 'team' ){
+                            set_media_category($attach_id, 'Team images');
                         } else {
-                            set_media_category($attach_id, 'Post images', $report);
+                            set_media_category($attach_id, 'Post images');
                         }
 
                     } else {
@@ -327,12 +327,11 @@ function transform_image($img, $content_type, $site_url){
     //error_log('transform_image $content_type '.$content_type. ' site_url: '.$site_url);
     $src = $img->getAttribute('src');
     $alt = $img->getAttribute('alt');
-
     // List image
     error_log("Image found: src=" . esc_html($src) . ", alt=" . esc_html($alt));
 
     // Download image
-    $upload = transform_and_upload_image($src, $report, $content_type, $site_url);
+    $upload = transform_and_upload_image($src, $content_type, $site_url);
     if ( !isset($upload['attach_id'])){
         error_log(sprintf("Error uploading image %s", $src));
         //var_dump($upload);
@@ -343,4 +342,57 @@ function transform_image($img, $content_type, $site_url){
         $img->setAttribute('src', $upload['src']);
     }
 }
+/**
+ * Handles the AJAX request to move and update a media item.
+ *
+ * This function is the bridge between the JavaScript call and your
+ * existing PHP function `moveupdate()`.
+ */
+function handle_move_image_item() {
+    // Security check: Verify the nonce to ensure the request is legitimate.
+    check_ajax_referer('move_image_nonce', 'security');
+
+    // Ensure the required 'href' parameter is present in the request.
+    if (!isset($_POST['src'])) {
+        wp_send_json_error([
+            'status' => 400,
+            'message' => 'Missing required parameter: href',
+            'original_url' => null,
+            'new_url' => null,
+        ]);
+    }
+
+    $src = sanitize_url($_POST['src']);
+
+    // Call your existing PHP function. Assuming it's in a separate file
+    // that is already included in your plugin.
+    // Replace 'moveupdate' with the actual function name if it's different.
+    $result = [
+        'status' => 501, 
+        'message' => 'transform image call not yet implemented',
+        'original_url' => $src,
+    ];
+    $upload = transform_and_upload_image($src, null, null);
+    if ( !isset($upload['attach_id'])){
+        $result['status'] = 500;
+        $result['message'] = 'Unable to get attachment id.';
+    } else {
+        $attach_id = $upload['attach_id'];
+    }
+    if ( isset($upload['src'])){
+        $result['status'] = 200;
+        $result['message'] = 'Transformed and acquired image.';
+        $result['new_url'] =  $upload['src'];
+    }
+
+    // Send a JSON response back to the JavaScript function.
+    // The 'data' key will contain the new URL.
+    if ($result['status'] === 200) {
+        wp_send_json_success($result);
+    } else {
+        wp_send_json_error($result);
+    }
+}
+// This hook listens for AJAX requests from logged-in users with the 'move_media_item' action.
+add_action('wp_ajax_move_image_item', 'handle_move_image_item');
 ?>

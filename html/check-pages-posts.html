@@ -6,8 +6,6 @@
             <td>
                 <select name="post_type" id="post_type">
                     <option value="posts" selected>Post</option>
-                    <option value="team">Team</option>
-                    <option value="event">Event</option>
                     <option value="pages">Page</option>
                 </select>
             </td>
@@ -17,26 +15,12 @@
             <td>
                 <select id="method" name="method" >
                     <option value="all" selected>All</option>
-                    <option value="slug">URL/slug</option>
                 </select>
             </td>
         </tr>
-        <tr class="DATE_ENTRY">
-            <th>Dates:</th>
-            <td>From:<input type="date" id="from_date" name="from_date"/></td>
-            <td>To:<input type="date" id="to_date" name="to_date"/></td>
-        </tr>
-        <tr class="URL_entry">
-            <th>URL:</td>
-            <td>
-                <input name="url" id="url" width="300"/>
-            </td>
-        </tr>
-        <tr class="URL_entry">
-            <th>Slug</td>
-            <td>
-                <input name="slug" id="slug" width="150"/>
-            </td>
+        <tr>
+            <td>Auto update</td>
+            <td><input type="checkbox" id="auto_update" /></td>
         </tr>
         <tr>
             <td>
@@ -49,6 +33,8 @@
                     <tr><td>Date</td><td id="post_date"></td></tr>
                     <tr><td id="current"></td><td id="count"></td></tr>
                     <tr><td>Need update:</td><td id="toupdate" ></td></tr>
+                    <tr><td>Updated:</td><td id="updated" ></td></tr>
+                    <tr><td>Moving:</td><td id="moving"></td></tr>
                     <tr><td>Prompts</td><td id="prompts"></td></tr>
                 </table>
             </td>
@@ -59,31 +45,45 @@
     <h2>Action categories</h2>
     <p>This gives the action classification that is applied to references</p>
     <div id="actions"></div>
-    <h2>Links identified as emaiils</h2>
+    <p>Links with the following beginnings are excluded from processing:</p>
+    <ul>
+        <li><a href="https://festival.actionclimateteignbridge.org/" target="_blank" >Festival website</a></li>
+        <li>https://actionclimateteignbridge.org/lookup_document.php/ - versioned documents</li>
+        <li><a href="https://actionclimateteignbridge.org/mapping/mapping.html" target="_blank">Unmigrated mapping sites</a></li>
+    </ul>
+    <p>Often references include the current domain and just need this changing to a relative url,
+        this plugin does this automatically.
+    </p>
+    <ul>
+        <li><span id="home_url"></span> </li>
+        <li><span id="home_url_un"></span> </li>
+    </ul>
+    <h2>Links identified as emails</h2>
     <p>These links have been identified as attempts at putting an email address into a post, even if they are in correct mailto: most machines won't be configured to respond correctly.
         Alternative contact-us links are proposed.
     </p>
-    <p>These changes can be automated once agreed</p>
+    <p>These changes are automated</p>
     <div id="emails"></div>
     <h2>Links identified as pages on newsite</h2>
     <p>These links have been identified as links to pages on newsite. Alternatives are suggested in most cases.</p>
-    <p>These changes can be automated once agreed</p>
+    <p>These changes are automated</p>
     <div id="newsites"></div>
     <h2>Maps</h2>
-    <p>Links to maps come from newsite/maps.html, references to mapping.html and others, which are still being identied</p>
+    <p>Links to maps come from newsite/maps.html which are still being identied</p>
     <div id="maps"></div>
-    <h2>pdf Documents</h2>
-    <p>These are pdf documents which should be versioned and referenced via lookup_document.php </p>
-    <div id="pdfs" ></div>
-    <p>These changes cannot yet be automated.</p>
-    <h2>docx Documents</h2>
-    <p>These are docx documents whixh should be exported to pdf and then referenced via lookup_document.php</p>
-    <div id="docs" ></div>
-    <p>These changes cannot yet be automated.</p>
+    <h2>Versioned media</h2>
+    <p>These are documents with version numbers that are linked via https://actionclimateteignbridge.org/lookup_document.php</p>
+    <p>These are not changed by this process.</p>
+    <h2>Media</h2>
+    <p>These are other media which are referenced directly and need to be moved to the  current media library.</p>
+    <div id="media" ></div>
+    <div id="media_moves"></div>
+    <p>These changes will be automated.</p>
     <h2>images</h2>
     <p>These are images (png, jpg, jpeg, webp) which should be moved from the their current location</p>
     <div id="images" ></div>
-    <p>These changes cannot yet be automated.</p>
+    <div id="image_moves"></div>
+    <p>These changes will be automated.</p>
     <h2>Other links</h2>
     <div id="others"></div>
     <h1>Details of posts/pages</h1>
