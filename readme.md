@@ -5,6 +5,7 @@ This plugin loads pages and posts from the following sources:
 + Load Pages and Posts - Wordpress pages and posts from a legacy site
 + Check Pages and Posts - Checks references from content on new site,
   this runs much quicker and more interactively that Load pages and posts.
++ Migrate versioned media.
   
 This plugin has been written to work with the actionclimateteignbridge.org website, but may be useful elsewhere.
 
@@ -42,6 +43,10 @@ Produces a quick report on references src= and href= in the content of posts and
 + For images moving to the the new site is suggested followed by linking to the new address
 + For maps these need to be added to the list for ACT_maps
 + Others are either links we can leave, or still need consideration (the number of these is dropping slowly).
+
+## Migrate versioned media
+Copies documents referenced in oldsite/act-document-list to media library of current and
+creates a document with correct links and matching document.
 
 ### Load Pages and Posts - input form
 The admin form has the following inputs:
