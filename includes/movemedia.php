@@ -132,6 +132,7 @@ add_action('wp_ajax_move_media_item', 'handle_move_media_item');
  * existing PHP function `moveupdate()`.
  */
 function handle_move_media_item() {
+    error_log("handle_move_media_item called");
     // Security check: Verify the nonce to ensure the request is legitimate.
     check_ajax_referer('move_media_nonce', 'security');
 

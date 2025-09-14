@@ -3,7 +3,7 @@
  * Plugin Name: ACT Load
  * Plugin URI:  https://sites.stringerhj.co.uk/ACT/WP_plugins/ACT_load/html/ACT_load.html
  * Description: Loads content from JSON URLs, exis  ting pages/posts
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Julian Stringer
  * Author URI: // (Optional: URL to your website)
  */
@@ -23,32 +23,74 @@ require_once plugin_dir_path(__FILE__) . 'includes/url_checker.php';
 add_action('admin_enqueue_scripts', 'act_load_enqueue_scripts');
 
 function act_load_enqueue_scripts( $hook_suffix ) {
-    wp_enqueue_script('act-load-script', plugins_url('js/act-load.js', __FILE__), array('jquery'), '1.0', true);
-    wp_localize_script('act-load-script', 'act_load_params', array('ajaxurl' => admin_url('admin-ajax.php')));
-    wp_enqueue_script('act-load-site-lookups', plugins_url('js/site_lookups.js',__FILE__), array(), '1.1', true);
-    //error_log('hook_suffix '.$hook_suffix);
+    // Helper to get file modification time for versioning
+    function act_get_script_version($relative_path) {
+        $file = plugin_dir_path(__FILE__) . $relative_path;
+        return file_exists($file) ? filemtime($file) : false;
+    }
+    // move-things.js
+    $move_things_js = 'js/move_things.js';
+    wp_enqueue_script('move-things-script', plugins_url($move_things_js, __FILE__),
+        array(), act_get_script_version($move_things_js), true);
+    $move_media_nonce = wp_create_nonce('move_media_nonce');
+    $move_image_nonce = wp_create_nonce('move_image_nonce');
+    $ajax_url         = admin_url('admin-ajax.php');
+    wp_localize_script('move-things-script', 'move_things_params', array(
+        'ajax_url'          => $ajax_url,
+        'move_media_nonce' => $move_media_nonce,
+        'move_image_nonce' => $move_image_nonce,
+    ));
+    // act-load.js
+    $act_load_js = 'js/act-load.js';
+    wp_enqueue_script('act-load-script', plugins_url($act_load_js, __FILE__),
+        array('jquery'),act_get_script_version($act_load_js),true);
+    wp_localize_script('act-load-script', 'act_load_params', 
+                    array('ajaxurl' => $ajax_url));
+
+    // site_lookups.js
+    $site_lookups_js = 'js/site_lookups.js';
+    wp_enqueue_script('act-load-site-lookups', plugins_url($site_lookups_js, __FILE__),
+        array(), act_get_script_version($site_lookups_js), true);
+
     if ( $hook_suffix === 'act-load_page_act-load-check-pages-posts' ){
-        wp_enqueue_script('check-pages-posts', plugins_url('js/check-pages-posts.js', __FILE__), array('jquery','act-load-site-lookups'), '1.2', true);
+        // check-pages-posts.js
+        $check_pages_posts_js = 'js/check-pages-posts.js';
+        wp_enqueue_script('check-pages-posts', plugins_url($check_pages_posts_js, __FILE__), 
+            array('jquery','act-load-site-lookups', 'move-things-script'), act_get_script_version($check_pages_posts_js), true);
         $localized_data = array(
             'rest_url'           => get_rest_url() . 'wp/v2/',
-            'home_url'           => home_url(), // Useful for relative URLs or site root
+            'home_url'           => home_url(),
             'nonce'              => wp_create_nonce( 'wp_rest' ),
-            'ajax_url'           => admin_url('admin-ajax.php'),
-            'move_media_nonce'   => wp_create_nonce( 'move_media_nonce'),
-            'move_image_nonce'   => wp_create_nonce( 'move_image_nonce'),
+            'ajax_url'           => $ajax_url,
             'url_check_nonce'    => wp_create_nonce( 'url_check_nonce'), 
             'recipients_csv'     => load_recipients()
         );
         wp_localize_script('check-pages-posts','check_pages_data', $localized_data);
     }
     if ($hook_suffix === 'act-load_page_act-load-pages-posts') {
-        wp_enqueue_script(
-            'act-load-pages-posts-script', // Unique handle for this script
-            plugins_url('js/act-load-pages-posts.js', __FILE__), // Path to your JavaScript file
-            array('jquery'), // Dependencies (jQuery in this case)
-            '1.0', // Version number
-            true // Load in the footer
+        // act-load-pages-posts.js
+        $pages_posts_js = 'js/act-load-pages-posts.js';
+        wp_enqueue_script('act-load-pages-posts-script', plugins_url($pages_posts_js, __FILE__),
+            array('jquery'), act_get_script_version($pages_posts_js), true);
+    }
+    if ($hook_suffix === 'act-load_page_act-load-migrate-vm') {
+        // vm-migrate.js
+        $vm_migrate_js = 'js/act_vm_migrate.js';
+        wp_enqueue_script('vm-migrate-script', plugins_url($vm_migrate_js, __FILE__),
+            array('jquery', 'move-things-script'), act_get_script_version($vm_migrate_js), true);
+        $remote_credentials = [
+            'site_url' => 'https://actionclimateteignbridge.org/oldsite',
+            'username' => 'apimigrator',
+            'password' => 'YKbx f4mI AcY4 uBKW qFMl Fqgj',
+        ];
+        $vm_migrate_data = array(
+            'remote_credentials' => $remote_credentials,
+            'rest_url_base'      => get_rest_url(),
+            'home_url'           => home_url(),
+            'wp_rest_nonce'      => wp_create_nonce( 'wp_rest' ),
+            'ajax_url'           => $ajax_url,
         );
+        wp_localize_script('vm-migrate-script','vm_migrate_data', $vm_migrate_data);
     }
 }
 // AJAX Handler (just the action registration here)
@@ -67,6 +109,8 @@ function act_load_menu() {
     add_submenu_page('act-load', 'Single JSON page/post', 'Single JSON page/post', 'edit_posts', 'act-load-single-json','act_load_single_json_page');
     add_submenu_page('act-load', 'Load Posts and Pages', 'Load Posts and Pages', 'edit_posts', 'act-load-pages-posts',  'act_load_pages_posts');
     add_submenu_page('act-load', 'Check Posts and Pages', 'Check Posts and Pages', 'edit_posts', 'act-load-check-pages-posts','act_load_check_pages_posts');
+    add_submenu_page('act-load', 'Migrate versioned documents', 'Migrate versioneddocuments', 'edit_posts', 'act-load-migrate-vm','act_migrate_vm_page');
+
 }
 function act_load_page() {
     // Top-level page content (can be empty or a welcome message)
@@ -77,6 +121,7 @@ function act_load_page() {
         echo '<li><a href="' . admin_url( 'admin.php?page=act-load-single-json') .'">Load single JSON page</a></li>';
         echo '<li><a href="' . admin_url( 'admin.php?page=act-load-pages-posts') .'">Load Pages and Posts</a></li>';
         echo '<li><a href="' . admin_url( 'admin.php?page=act-load-check-pages-posts').'">Check Posts and Pages</a></li>';
+        echo '<li><a href="' . admin_url( 'admin.php?page=act-load-migrate-vm').'">Migrate versioned documents</a></li>';
     echo '</ul>';
 }
 
@@ -85,6 +130,9 @@ function act_load_single_json_page() { // Callback for the single JSON page
 }
 function act_load_check_pages_posts() {
     include plugin_dir_path(__FILE__). 'html/check-pages-posts.html';
+}
+function act_migrate_vm_page() {
+    include plugin_dir_path(__FILE__) . 'html/act-load-vm-migrate.html';
 }
 function act_load_pages_posts() {
     // Callback for the Load Pages and Posts page
@@ -143,7 +191,5 @@ function act_load_single_json_page_handler() {
         }
     }
 }
-
-
 
 ?>

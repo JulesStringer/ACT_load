@@ -5,8 +5,6 @@ jQuery(document).ready(function($) {
     let home_url = check_pages_data.home_url;
     let home_url_un = home_url.replace('https','http');
     let nonce    = check_pages_data.nonce;
-    let move_media_nonce = check_pages_data.move_media_nonce;
-    let move_image_nonce = check_pages_data.move_image_nonce;
     let recipients_csv = check_pages_data.recipients_csv;
     let url_check_nonce = check_pages_data.url_check_nonce;
     let ajax_url = check_pages_data.ajax_url;
@@ -14,8 +12,6 @@ jQuery(document).ready(function($) {
     $('#home_url').text(home_url);
     $('#home_url_un').text(home_url_un);
     console.log('nonce: ' + nonce);
-    console.log('move_media_nonce: ' + move_media_nonce);
-    console.log('move_image_nonce: ' + move_image_nonce);
     console.log('recipients_csv: ' + recipients_csv);
     console.log('url_check_nonce:' + url_check_nonce);
     function parse_recipients_csv(csvdata) {  // Function name lowercase
@@ -604,7 +600,7 @@ jQuery(document).ready(function($) {
                             } else {
                                 body += element.newlink;
                             }
-                        } else if ( element.prompt ){
+                        } else if ( element.prompt || element.action){
                             body += element.action + ' needs manual update';
                         }
                         body += '</td>';
@@ -660,96 +656,6 @@ jQuery(document).ready(function($) {
 
         }
         return result;
-    }
-    /**
-     * Asynchronously calls the PHP function to update a media item.
-     *
-     * @param {string} href The URL of the media item on the remote site.
-     * @returns {Promise<string>} A promise that resolves to the new URL on the current site.
-     */
-    async function update_media_item(href) {
-        try {
-            // Create form data to send to the AJAX endpoint.
-            const formData = new FormData();
-            formData.append('action', 'move_media_item');
-            formData.append('href', href);
-
-            // Retrieve the security nonce from the localized data.
-            formData.append('security', move_media_nonce);
-
-            // Send a POST request to the WordPress AJAX endpoint.
-            const response = await fetch(ajax_url, {
-                method: 'POST',
-                body: formData,
-            });
-
-            // Check if the request was successful.
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            // Check if the PHP function returned an error.
-            console.log('result: ' + JSON.stringify(result));
-            if (!result.success) {
-                throw new Error(result.data || 'PHP function returned an error.');
-            }
-            // Return the new URL from the successful response data.
-            console.log('new_url: ' + result.data.new_url);
-            return result.data.new_url;
-
-        } catch (error) {
-            console.error('Error in update_media_item:', error);
-            // Re-throw the error so the calling function can handle it.
-            throw error;
-        }
-    }
-    /**
-     * Asynchronously calls the PHP function to update a media item.
-     *
-     * @param {string} href The URL of the media item on the remote site.
-     * @returns {Promise<string>} A promise that resolves to the new URL on the current site.
-     */
-    async function update_image_item(src) {
-        try {
-            // Create form data to send to the AJAX endpoint.
-            let post_type = $('#post_type').val();
-            const formData = new FormData();
-            formData.append('action', 'move_image_item');
-            formData.append('src', src);
-
-            // Retrieve the security nonce from the localized data.
-            formData.append('security', move_image_nonce);
-            formData.append('post_type', post_type);
-
-            // Send a POST request to the WordPress AJAX endpoint.
-            const response = await fetch(ajax_url, {
-                method: 'POST',
-                body: formData,
-            });
-
-            // Check if the request was successful.
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            // Check if the PHP function returned an error.
-            console.log('result: ' + JSON.stringify(result));
-            if (!result.success) {
-                throw new Error(result || 'PHP function returned an error.');
-            }
-            // Return the new URL from the successful response data.
-            console.log('new_url: ' + result.data.new_url);
-            return result.data.new_url;
-
-        } catch (error) {
-            console.error('Error in update_image_item:', error);
-            // Re-throw the error so the calling function can handle it.
-            throw error;
-        }
     }
     async function update_references(href, new_href, x_refs_table){
         let post_type = $('#post_type').val();
