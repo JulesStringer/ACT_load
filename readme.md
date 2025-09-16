@@ -8,6 +8,11 @@ This plugin loads pages and posts from the following sources:
 + Migrate versioned media.
   
 This plugin has been written to work with the actionclimateteignbridge.org website, but may be useful elsewhere.
+The option Load Pages and Posts has been cannibalised in the creation of the final 2 options, and hasn't been tested since then.
+
+Load Pages and Posts was written first as a batch process, which has poor user interaction, and is prone to running out of resources,
+it is a source of useful functions some of which were used in the later functions. If I had time / motivation I would rewrite it in the
+style of Check pages and posts, which has adopted much of its functionality. 
 
 ## Load Single JSON Page
 Takes a json file downloaded from the Wordpress REST API (as used in https://actionclimateteignbridge.org/newsite and imports it to the current site, including:
@@ -47,6 +52,7 @@ Produces a quick report on references src= and href= in the content of posts and
 ## Migrate versioned media
 Copies documents referenced in oldsite/act-document-list to media library of current and
 creates a document with correct links and matching document.
+
 
 ### Load Pages and Posts - input form
 The admin form has the following inputs:
