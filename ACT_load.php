@@ -17,6 +17,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/process-image.php';
 require_once plugin_dir_path(__FILE__) . 'includes/load-recipients.php';
 require_once plugin_dir_path(__FILE__) . 'includes/movemedia.php';
 require_once plugin_dir_path(__FILE__) . 'includes/url_checker.php';
+require_once plugin_dir_path(__FILE__) . 'includes/act-load-fetch.php';
 // ... any other includes
 
 // Enqueue scripts (add this to your plugin file)
@@ -81,13 +82,15 @@ function act_load_enqueue_scripts( $hook_suffix ) {
         $remote_credentials = [
             'site_url' => 'https://actionclimateteignbridge.org/oldsite',
             'username' => 'apimigrator',
-            'password' => 'YKbx f4mI AcY4 uBKW qFMl Fqgj',
+            'password' => 'YKbxf4mIAcY4uBKWqFMlFqgj',
+//            'password' => 'YKbx f4mI AcY4 uBKW qFMl Fqgj',
+//              'password' => 'oX1z LDjf NudP cMRB ttQS innb',
         ];
         $vm_migrate_data = array(
-            'remote_credentials' => $remote_credentials,
             'rest_url_base'      => get_rest_url(),
             'home_url'           => home_url(),
             'wp_rest_nonce'      => wp_create_nonce( 'wp_rest' ),
+            'get_remote_doc_nonce' => wp_create_nonce('get-remote-page'),
             'ajax_url'           => $ajax_url,
         );
         wp_localize_script('vm-migrate-script','vm_migrate_data', $vm_migrate_data);

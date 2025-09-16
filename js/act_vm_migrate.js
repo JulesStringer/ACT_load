@@ -4,11 +4,12 @@ jQuery(document).ready(function($) {
     let status_div = $('#migration-status');
     // get localised varibles from PHP
     console.log('vm_migrate_data: ', vm_migrate_data);
-    let rest_url_base =      vm_migrate_data.rest_url_base;
+    let rest_url_base = vm_migrate_data.rest_url_base;
+    let wp_rest_nonce = vm_migrate_data.wp_rest_nonce;
+    let get_remote_doc_nonce 
+                      = vm_migrate_data.get_remote_doc_nonce;
+    let ajax_url =      vm_migrate_data.ajax_url;
     console.log|('rest_url_base: ' + rest_url_base);
-    let wp_rest_nonce =      vm_migrate_data.wp_rest_nonce;
-    let remote_credentials = vm_migrate_data.remote_credentials;
-    console.log('Remote credentials:', remote_credentials);
     let is_migrating = false;
     $('#migrate-button').on('click', async function() {
         if (is_migrating) {
@@ -70,29 +71,31 @@ jQuery(document).ready(function($) {
             status_div.append('<p>No content.raw found.</p>');
         }
     });
+    // rather than using the REST API to get the old page, use a server alax request.
     async function get_old_list_page() {
-        let url = `${remote_credentials.site_url}/wp-json/wp/v2/pages?slug=act-document-list&context=edit`;
-        console.log('Fetching from URL:', url);
-        try {
-            let response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Basic ' + btoa(remote_credentials.username + ':' + remote_credentials.password),
-                    'Content-Type': 'application/json'
-                }
-            });
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            let json = await response.json();
-            console.log('Response JSON:', json);
-            // The API returns an array of pages, so return the first one if present
-            return json.length > 0 ? json[0] : null;
-        } catch (error) {
-            status_div.append('<p>Error fetching page: ' + error.message + '</p>');
+        let data = new FormData();
+        data.append('action', 'get_remote_page_content');
+        data.append('site_code', 'OLDSITE');
+        data.append('slug', 'act-document-list');
+        data.append('post_type', 'page');
+        data.append('nonce', get_remote_doc_nonce); // Add the nonce here
+
+        // ... [rest of the fetch request] ...
+        let response = await fetch(ajax_url, {
+            method: 'POST',
+            body: data
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`HTTP error! Status: ${response.status}, Code: ${errorData.code}`);
+        }
+        let json = await response.json();
+        console.log('Response JSON:', json);
+        if (json.success) {
+            return json.data[0]; // PHP returns the page in data[0]
+        } else {
+            status_div.append('<p>Error fetching page: ' + json.data + '</p>');
             return null;
-        } finally {
-            migrate_button.prop('disabled', false);
         }
     }
     async function insert_page(newpage){

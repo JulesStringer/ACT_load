@@ -25,13 +25,105 @@
     </head>
     <body>
         <h1>ACT Load</h1>
-        <p>This plugin loads pages and posts from the following sources:</p>
+        <p>This plugin performs various site migration tasks.</p>
+        <p>Once migration is complete it should be deactivated and removed from the site.</p>
+        <p>It has the following options:</p>
         <ul>
-            <li>Load Single JSON Page - JSON files downloaded from the WP REST API into subdirectories of newsite</li>
-            <li>Load Pages and Posts - Wordpress pages and posts from a legacy site</li>
+            <li>Load Single JSON Page - JSON files downloaded from the WP REST API into subdirectories of newsite - superceded</li>
+            <li>Load Pages and Posts - Wordpress pages and posts from a legacy site - superceded</li>
+            <li>Check pages and posts - Interactively performs various integrity checks</li>
+            <li>Migrate versioned documents - moves documents referenced in act-document-list to domain</li>
         </ul>
-        <h2>Load Single JSON Page</h2>
-        <p>Takes a json file downloaded from the Wordpress REST API (as used in https://actionclimateteignbridge.org/newsite
+        <h2>Pre-requisites</h2>
+        <h3>Sites lookup in wp-config.php</h3>
+        <p>This plugin needs the ability to read remote sites with editing context from the Wordpress REST api.
+            This requires that an application password is set up and entered in a table in wp-config.php</p>
+        <p>This lookup table contains an entry for each site code, containins:
+            <ul>
+                <li>Site url</li>
+                <li>Application password name</li>
+                <li>Application password</li>
+            </ul>
+            an example table with passwords obscured is entered as follows:
+        </p>
+        <pre>
+            <code>
+                / Define a single constant to hold all site credentials as a JSON object
+define('REMOTE_CREDENTIALS', '{
+    "OLDSITE": {
+        "site_url": "https://actionclimateteignbridge.org/oldsite",
+        "username": "apimigrator",
+        "password": "xxxx xxxx xxxx xxxx xxxx xxxx"
+    },
+    "WW": {
+        "site_url": "https://ww.actionclimateteignbridge.org",
+        "username": "apimigrator",
+        "password": "xxxx xxxx xxxx xxxx xxxx xxxx"
+    },
+    "CC": {
+        "site_url": "https://cc.actionclimateteignbridge.org",
+        "username": "apimigrator",
+        "password": "xxxx xxxx xxxx xxxx xxxx xxxx"
+    }
+}');
+            </code>
+        </pre>
+        <p>This guide <a href="https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/" target="_blank" >application password</a>
+            provides further infomation on setting up each each remote site.
+        </p>
+        <p></p>
+        <h2>Check Pages and Posts</h2>
+        <ul>
+            <li>Check Pages and Posts - Checks for, lists and optionally fixes::
+                <ul>
+                    <li>References containing actionclimateteignbridge.org are analysed.</li>
+                    <li>References beginning with any of the following are ignored:
+                        <ul>
+                            <li>https://actionclimateteignbridge.org/lookup_document.php</li>
+                            <li>#</li>
+                            <li>https://festival.actionclimateteignbridge.org</li>
+                            <li>https://actionclimateteignbridge.org/mapping/</li>
+                            <li>https://actionclimateteignbridge.org/lookup_document.php/</li>
+                        </ul>
+                    </li>
+                    <li>References containing any of the following are ignored
+                        <ul>
+                            <li>plugins/ACT_maps</li>
+                        </ul>
+                    </li>
+                    <li>References that begin with the current domain are made relative.</li>
+                    <li>Links that begin mailto: (or misspellings thereof) or end @actionclimateteignbridge.org are mailto addresses,
+                        and are changesd to contact-us using reverse lookup on recipients list. Some explicit emails addresses
+                        are also matched, either because they are not in the recipients list or to resolve duplicates.</li>
+                    <li>Links beginning https://actionclimateteignbridge.org/newsite are treated depending on what follows:
+                        <ul>
+                            <li>page.php - lookup table is consulted to determine equivalent page</li>
+                            <li>events.html - link to /activities/events</li>
+                            <li>maps.html - action is flagged</li>
+                        </ul> 
+                    </li>
+                    <li>If a # is used for an in page reference this is kept separate and used in the final link.</li>
+                    <li>Media (pdf, docx) if on a remote site on our server are moved, links adjusted</li>
+                    <li>Images (png, jpg, jpeg, webp) if on a remote site on our server are moved, links adjusted</li>
+                    <li>When Images are moved they are reduced if necessary to no more than 200kb and 300 X 300 pixels</li>
+                    <li>links to domain resources are relative</li>
+                    <li>Responsive - runs in foreground with backend support.</li>
+                </ul>
+            </li>
+        </ul>
+        <h2>Migrate versioned documents - moves documents referenced in act-document-list to domain</h2>
+        <ul>
+            <li>act-document-list is a page which contains links to media that have version numbers
+                that are updated regularly. Links to these documents are implemented in pages using 
+                lookup_document.php which looks up the latest version of the document and redirects
+                    to it. Documents can then be placed in the media library and a single link updated
+                    in a standard location.">
+            </li>
+            <li>Moves documents to the current domain's media library.</li>
+            <li>Changes the link to point to the current domain.</li>
+        </ul>
+        <h2>Load Single JSON Page (SUPERCEDEDED)</h2>
+        <p>Takes a json file downloaded from the Wordpress REST API (as used in https://actionclimateteignbridge.org/newsite)
             and imports it to the current site, including:
             <ul>
                 <li>Moving any images</li>
@@ -41,16 +133,24 @@
         <p>NOTE - this was used early in the loading development to recover a couple of pages from newsite to oldsite.
             It is not expected that it will be used long term.
         </p>
-        <h2>Load Pages and Posts</h2>
+        <h2>Load Pages and Posts (SUPERCEDEDED)</h2>
+        <p>NOTE: This has not been tested for some time and the code has been cannibalised in the development of the previous 2 options.
+
+        </p>
         <p>Loads posts, pages, team members from various sites to the current site. The following are transformed in the process:
             <ul>
+                <li>Moves posts, pages and custom posts from a remote site (OLDSITE or WW)</li>
+                <li>Assets to move are selected by from and to date</li>
+                <li>Images are moved to the current site</li>
                 <li>Images are reduced to no more than 200kb and no more than 300 X 300 pixels</li>
+                <li>Media (pdf, docx) if on a remote site on our server are moved, links adjusted</li>
                 <li>Links internal to the site are changed so they still work (more detail later)</li>
                 <li>Categories are rationalise (see below)</li>
                 <li>Authors are mapped to users on the current site</li>
                 <li>Comments are copied</li>
                 <li>Featured media is set</li>
                 <li>Any post excerpt is set</li>
+                <li>Runs in the background - tends to run out of resources on batches over 6 months long</li>
             </ul>
         </p>
         <h3>Load Pages and Posts - input form</h3>

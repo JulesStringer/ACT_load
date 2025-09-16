@@ -36,20 +36,6 @@ function get_remote_media_url( $media, $base_url){
     }
     return null;
 }
-function formrestheaders($credentials){
-    $api_user = $credentials['username'];
-    $app_password = $credentials['password']; // Paste exactly what was generated
-    $user_password = $api_user.':'.$app_password;
-    error_log('user_password: '.$user_password);
-    $auth_header = 'Basic ' . base64_encode($user_password);
-
-    $args = [
-        'headers' => [
-            'Authorization' => $auth_header,
-        ],
-    ];
-    return $args;
-}
 function act_load_pages_posts_fetch_all_wp_rest($credentials, $post_type = 'post', $from_date = null, $to_date = null) {
     $all_posts = array();
     $page = 1;
@@ -154,32 +140,6 @@ function act_load_pages_posts_fetch_single_wp_rest($credentials, $post_id, $post
 //        'meta' => $data[0]['meta'], //example of how to pull meta data
 //    );
     return $data;
-}
-function act_load_pages_posts_fetch_single_wp_rest_by_slug($credentials, $slug, $post_type = 'post') {
-    $base_url = $credentials['site_url'];
-    $endpoint = rtrim($base_url, '/') . '/wp-json/wp/v2/' . $post_type . 's/?slug=' . $slug. '&context=edit';
-    error_log('$endpoint: '.$endpoint);
-    $args = formrestheaders($credentials);
-    $response = wp_remote_get($endpoint, $args);
-
-    if (is_wp_error($response)) {
-        return 'Error: ' . $response->get_error_message();
-    }
-
-    $body = wp_remote_retrieve_body($response);
-    $data = json_decode($body, true);
-
-    if (empty($data)) {
-        error_log ( 'Error: Empty or invalid response.');
-        return array();
-    }
-
-    if (isset($data['code'])) {
-        error_log('API Error: ' . $data['message']); // Handle WordPress REST API errors
-        return array();
-    }
-    error_log('Data received: ' . print_r($data, true));
-    return array($data);
 }
 function act_load_pages_posts_generate_report($report) {
     //Logic for generating a report.
@@ -735,17 +695,19 @@ function act_load_pages_posts_process() {
         'username' => 'apimigrator',
         'password' => 'qpYm Nv6S 3Ti0 xXQO UBDO xB61',
     ];
+    $all_credentials = json_decode(REMOTE_CREDENTIALS, true);
 
-//    $credentials = ($source === 'ACT') ? $act_credentials : $ww_credentials;
+    $site_code = $source;
     if ( $source === 'ACT'){
-        $credentials = $act_credentials;
-    } else if ( $source === 'WW'){
-        $credentials = $ww_credentials;
-    } else if ( $source === 'CC'){
-        $credentials = $cc_credentials;
-    } else {
-        $credentials = null;
+        $site_code = 'OLDSITE';
     }
+    // Check if the site code exists in the credentials array
+    if (!isset($all_credentials[$site_code])) {
+        // Return an error or handle the case where the site code is not found
+        error_log('Error: Invalid site code provided.');
+        return false;
+    }
+    $credentials = $all_credentials[$site_code];
     error_log('site_url:     '.$credentials['site_url']);
     init_category_conversion( $credentials['site_url'] );
 
